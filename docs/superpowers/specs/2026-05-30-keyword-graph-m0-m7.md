@@ -69,7 +69,8 @@ Runtime must:
 
 - Open SQLite snapshots read-only.
 - Validate snapshot metadata before use.
-- Fail clearly when snapshot is missing, incompatible, or corrupt.
+- Fail clearly when snapshot is missing, incompatible, missing required tables, or corrupt.
+- Expose typed Pydantic response models for concept rows, query bundles, rejected surfaces, lineage, and warnings.
 - Return fallback warnings instead of blocking SeekTalent when possible.
 - Produce deterministic output for the same input and snapshot.
 - Never call CTS.
@@ -97,6 +98,7 @@ Snapshot release requirements:
 - Contains no resume text.
 - Contains no raw `.env` values.
 - Has manifest and checksum.
+- Runtime snapshot validates required tables before release.
 
 ## Builder Contract
 
@@ -110,6 +112,12 @@ keyword-graph probe-cts ...
 keyword-graph build-snapshot ...
 keyword-graph validate-snapshot ...
 ```
+
+CLI requirements:
+
+- Each command has tested `--help` output.
+- Commands that can touch CTS default to dry-run-safe behavior.
+- Real CTS execution requires an explicit real-probe flag and the 09:00-21:00 window.
 
 Builder can use internal credentials only for CTS count probing. Real CTS defaults:
 
@@ -160,6 +168,10 @@ Create a real Python package project with test and lint commands.
 Acceptance:
 
 - `python -c "import seektalent_keyword_graph"` succeeds.
+- Editable install with dev and builder extras succeeds.
+- `python -m build --version` succeeds.
+- `pytest --version` succeeds.
+- `ruff --version` succeeds.
 - `pytest` succeeds.
 - `ruff check .` succeeds.
 - Package metadata name is `seektalent-keyword-graph`.
@@ -174,6 +186,8 @@ Acceptance:
 - Small fixture snapshot opens read-only.
 - Missing snapshot raises typed error.
 - Unsupported schema raises typed error.
+- Missing required runtime table raises typed error.
+- Corrupt or empty required metadata raises typed error.
 - Lookup tests pass.
 - `build_query_plan` returns deterministic response for fixture input.
 
@@ -209,6 +223,7 @@ Acceptance:
 - Real CTS code uses `page=1`, `pageSize=1`, and reads only `data.total`.
 - Real CTS command refuses to run outside 09:00-21:00 unless `--dry-run`.
 - Runtime package does not import builder CTS client.
+- CTS client representation and logs do not expose tenant secrets.
 
 ### M5: Snapshot Build and Query Bundle MVP
 
@@ -217,6 +232,7 @@ Build runtime snapshot from build DB and implement bundle selection.
 Acceptance:
 
 - Snapshot validates schema, manifest, checksum, and privacy rules.
+- Snapshot builder writes all required runtime tables.
 - Query bundles include `anchor`, `precision`, `alias_probe`, `exploration`, or `fallback` as applicable.
 - Response includes lineage, reason codes, rejected surfaces, and warnings.
 - Replay evaluation report is generated.
@@ -240,6 +256,8 @@ Acceptance:
 
 - Wheel builds.
 - Snapshot artifact validation rejects secrets, candidate lists, and oversized compressed snapshots.
+- CLI command dispatch is tested for all promised commands.
+- Runtime import-boundary test proves runtime does not import builder or CTS modules.
 - Release checklist exists.
 - Rollback instructions exist.
 

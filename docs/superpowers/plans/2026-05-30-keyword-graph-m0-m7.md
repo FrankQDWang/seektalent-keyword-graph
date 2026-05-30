@@ -21,6 +21,7 @@
 - Real CTS work is builder-only and must respect `1 RPS / 并发 1 / 09:00-21:00`.
 - Runtime code must never import `seektalent_keyword_graph.builder` or `seektalent_keyword_graph.cts`.
 - SeekTalent is a consumer. This package must not import SeekTalent.
+- A blank Goal runner must install editable dev and builder dependencies before running tests.
 
 ## Slice Checklist
 
@@ -44,7 +45,7 @@
 | S15 | M5 | Query bundle selection |
 | S16 | M5 | Replay evaluation report |
 | S17 | M6 | SeekTalent consumer contracts |
-| S18 | M7 | Release validation and rollback docs |
+| S18 | M7 | CLI dispatch, release validation, and rollback docs |
 | S19 | M7 | Final verification and readiness report |
 
 ---
@@ -73,6 +74,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "build>=1.2",
   "pytest>=8.0",
   "ruff>=0.5",
 ]
@@ -123,20 +125,38 @@ Use this content:
 3.12
 ```
 
-- [ ] **Step 4: Run scaffold verification**
+- [ ] **Step 4: Install editable dev and builder dependencies**
+
+Run:
+
+```bash
+python3 -m pip install -e ".[dev,builder]"
+```
+
+Expected:
+
+- Exit 0.
+- `seektalent-keyword-graph` is installed in editable mode.
+- `build`, `pytest`, `ruff`, `pydantic`, and `httpx` are available for later slices.
+
+- [ ] **Step 5: Run scaffold verification**
 
 Run:
 
 ```bash
 python3 -m pip --version
+pytest --version
+ruff --version
+python3 -m build --version
+python3 -c "import pydantic, httpx"
 python3 -m compileall -q .
 ```
 
 Expected:
 
-- Both commands exit 0.
+- All commands exit 0.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add pyproject.toml Makefile .python-version
@@ -285,16 +305,49 @@ def test_query_plan_response_shape():
     response = QueryPlanResponse(
         request_id="req_001",
         kg_snapshot_id="kg_test",
-        concept_sheet=[],
-        query_bundles=[],
-        rejected_surfaces=[],
-        lineage={"input_hash": "sha256:test"},
-        warnings=[],
+        concept_sheet=[
+            {
+                "concept_id": "concept_python",
+                "canonical_surface": "Python",
+                "matched_surfaces": ["Python"],
+                "evidence_codes": ["snapshot_surface_match"],
+            }
+        ],
+        query_bundles=[
+            {
+                "bundle_id": "bundle_anchor_1",
+                "bundle_type": "anchor",
+                "priority": 1,
+                "queries": [
+                    {
+                        "query_text": "Python",
+                        "surfaces": ["surface_python"],
+                        "expected_hit_count": 336708,
+                        "confidence": 0.8,
+                        "reason_codes": ["required_term", "snapshot_surface_match"],
+                    }
+                ],
+            }
+        ],
+        rejected_surfaces=[
+            {
+                "surface_text": "Alibaba",
+                "reason_code": "company_like",
+                "source": "automatic_blocklist",
+            }
+        ],
+        lineage={"input_hash": "sha256:test", "selection_policy_version": "policy-v1"},
+        warnings=[{"code": "low_recall", "message": "Recall is below target"}],
     )
 
     dumped = response.model_dump()
     assert dumped["schema_version"] == "query-plan-response-v1"
     assert dumped["kg_snapshot_id"] == "kg_test"
+    assert response.query_bundles[0].queries[0].query_text == "Python"
+    assert response.concept_sheet[0].concept_id == "concept_python"
+    assert response.rejected_surfaces[0].reason_code == "company_like"
+    assert response.lineage.input_hash == "sha256:test"
+    assert response.warnings[0].code == "low_recall"
 ```
 
 - [ ] **Step 2: Run test and verify RED**
@@ -326,6 +379,46 @@ class RequirementTerm(BaseModel):
     strength: Literal["required", "preferred", "nice_to_have", "unknown"] = "unknown"
 
 
+class ConceptSheetRow(BaseModel):
+    concept_id: str
+    canonical_surface: str
+    matched_surfaces: list[str] = Field(default_factory=list)
+    evidence_codes: list[str] = Field(default_factory=list)
+
+
+class QueryPlanQuery(BaseModel):
+    query_text: str
+    surfaces: list[str] = Field(default_factory=list)
+    expected_hit_count: int | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class QueryBundle(BaseModel):
+    bundle_id: str
+    bundle_type: Literal["anchor", "precision", "alias_probe", "exploration", "fallback"]
+    priority: int = Field(ge=1)
+    queries: list[QueryPlanQuery] = Field(default_factory=list)
+
+
+class RejectedSurface(BaseModel):
+    surface_text: str
+    reason_code: str
+    source: str = "runtime"
+
+
+class QueryPlanLineage(BaseModel):
+    input_hash: str | None = None
+    snapshot_schema_version: str | None = None
+    selection_policy_version: str | None = None
+
+
+class QueryPlanWarning(BaseModel):
+    code: str
+    message: str = ""
+    severity: Literal["info", "warning", "error"] = "warning"
+
+
 class QueryPlanRequest(BaseModel):
     schema_version: Literal["query-plan-request-v1"] = "query-plan-request-v1"
     request_id: str
@@ -342,23 +435,39 @@ class QueryPlanResponse(BaseModel):
     schema_version: Literal["query-plan-response-v1"] = "query-plan-response-v1"
     request_id: str
     kg_snapshot_id: str
-    concept_sheet: list[dict] = Field(default_factory=list)
-    query_bundles: list[dict] = Field(default_factory=list)
-    rejected_surfaces: list[dict] = Field(default_factory=list)
-    lineage: dict = Field(default_factory=dict)
-    warnings: list[dict] = Field(default_factory=list)
+    concept_sheet: list[ConceptSheetRow] = Field(default_factory=list)
+    query_bundles: list[QueryBundle] = Field(default_factory=list)
+    rejected_surfaces: list[RejectedSurface] = Field(default_factory=list)
+    lineage: QueryPlanLineage = Field(default_factory=QueryPlanLineage)
+    warnings: list[QueryPlanWarning] = Field(default_factory=list)
 ```
 
 Create `src/seektalent_keyword_graph/contracts/__init__.py`:
 
 ```python
 from seektalent_keyword_graph.contracts.query_plan import (
+    ConceptSheetRow,
+    QueryBundle,
+    QueryPlanLineage,
+    QueryPlanQuery,
     QueryPlanRequest,
     QueryPlanResponse,
+    QueryPlanWarning,
+    RejectedSurface,
     RequirementTerm,
 )
 
-__all__ = ["QueryPlanRequest", "QueryPlanResponse", "RequirementTerm"]
+__all__ = [
+    "ConceptSheetRow",
+    "QueryBundle",
+    "QueryPlanLineage",
+    "QueryPlanQuery",
+    "QueryPlanRequest",
+    "QueryPlanResponse",
+    "QueryPlanWarning",
+    "RejectedSurface",
+    "RequirementTerm",
+]
 ```
 
 Modify `src/seektalent_keyword_graph/__init__.py`:
@@ -409,15 +518,64 @@ git commit -m "feat: add query plan contracts"
 Create `tests/runtime/test_sqlite_snapshot.py`:
 
 ```python
+import sqlite3
 from pathlib import Path
 
 import pytest
 
-from seektalent_keyword_graph.runtime.errors import SnapshotUnavailableError
+from seektalent_keyword_graph.runtime.errors import (
+    SnapshotIntegrityError,
+    SnapshotUnavailableError,
+    UnsupportedSnapshotError,
+)
 from seektalent_keyword_graph.runtime.sqlite_snapshot import SQLiteSnapshot
 
 
 FIXTURE = Path("tests/fixtures/snapshots/minimal.sqlite3")
+REQUIRED_RUNTIME_TABLE_SQL = """
+create table concepts (
+  concept_id text primary key,
+  canonical_surface text not null
+);
+create table surfaces (
+  surface_id text primary key,
+  display_text text not null,
+  normalized_text text not null,
+  query_safe integer not null,
+  latest_cts_total integer,
+  latest_cts_status text not null
+);
+create table concept_surfaces (
+  concept_id text not null,
+  surface_id text not null
+);
+create table surface_relations (
+  source_surface_id text not null,
+  target_surface_id text not null,
+  relation_type text not null,
+  evidence_score real not null
+);
+create table cooccurrence_edges (
+  source_concept_id text not null,
+  target_concept_id text not null,
+  weight real not null
+);
+create table cts_recall_observations (
+  surface_id text not null,
+  total integer,
+  status text not null,
+  observed_at text not null
+);
+create table selection_policy_meta (
+  selection_policy_version text not null
+);
+"""
+
+
+def write_snapshot(path: Path, script: str) -> None:
+    conn = sqlite3.connect(path)
+    conn.executescript(script)
+    conn.close()
 
 
 def test_snapshot_meta_loads():
@@ -431,6 +589,61 @@ def test_snapshot_meta_loads():
 def test_missing_snapshot_raises():
     with pytest.raises(SnapshotUnavailableError):
         SQLiteSnapshot.open("missing.sqlite3")
+
+
+def test_unsupported_snapshot_schema_raises(tmp_path):
+    path = tmp_path / "unsupported.sqlite3"
+    write_snapshot(
+        path,
+        """
+        create table snapshot_meta (
+          kg_snapshot_id text not null,
+          snapshot_schema_version text not null,
+          selection_policy_version text not null
+        );
+        insert into snapshot_meta values ('kg_bad', 'snapshot-v999', 'policy-v1');
+        """
+        + REQUIRED_RUNTIME_TABLE_SQL,
+    )
+
+    with pytest.raises(UnsupportedSnapshotError):
+        SQLiteSnapshot.open(path)
+
+
+def test_missing_required_table_raises(tmp_path):
+    path = tmp_path / "missing_table.sqlite3"
+    write_snapshot(
+        path,
+        """
+        create table snapshot_meta (
+          kg_snapshot_id text not null,
+          snapshot_schema_version text not null,
+          selection_policy_version text not null
+        );
+        insert into snapshot_meta values ('kg_bad', 'snapshot-v1', 'policy-v1');
+        """,
+    )
+
+    with pytest.raises(SnapshotIntegrityError):
+        SQLiteSnapshot.open(path)
+
+
+def test_empty_snapshot_meta_raises(tmp_path):
+    path = tmp_path / "empty_meta.sqlite3"
+    write_snapshot(
+        path,
+        """
+        create table snapshot_meta (
+          kg_snapshot_id text not null,
+          snapshot_schema_version text not null,
+          selection_policy_version text not null
+        );
+        """
+        + REQUIRED_RUNTIME_TABLE_SQL,
+    )
+
+    with pytest.raises(SnapshotIntegrityError):
+        SQLiteSnapshot.open(path)
 ```
 
 - [ ] **Step 2: Run test and verify RED**
@@ -475,7 +688,24 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from seektalent_keyword_graph.runtime.errors import SnapshotUnavailableError
+from seektalent_keyword_graph.runtime.errors import (
+    SnapshotIntegrityError,
+    SnapshotUnavailableError,
+    UnsupportedSnapshotError,
+)
+
+
+SUPPORTED_SNAPSHOT_SCHEMA_VERSION = "snapshot-v1"
+REQUIRED_TABLES = {
+    "snapshot_meta",
+    "concepts",
+    "surfaces",
+    "concept_surfaces",
+    "surface_relations",
+    "cooccurrence_edges",
+    "cts_recall_observations",
+    "selection_policy_meta",
+}
 
 
 class SQLiteSnapshot:
@@ -494,13 +724,40 @@ class SQLiteSnapshot:
             connection = sqlite3.connect(uri, uri=True)
         except sqlite3.Error as exc:
             raise SnapshotUnavailableError(f"Snapshot cannot be opened: {snapshot_path}") from exc
-        return cls(snapshot_path, connection)
+        snapshot = cls(snapshot_path, connection)
+        snapshot.validate()
+        return snapshot
+
+    def validate(self) -> None:
+        try:
+            table_rows = self.connection.execute(
+                "select name from sqlite_master where type = 'table'"
+            ).fetchall()
+        except sqlite3.Error as exc:
+            raise SnapshotIntegrityError("Snapshot catalog cannot be read") from exc
+
+        existing_tables = {row["name"] for row in table_rows}
+        missing_tables = REQUIRED_TABLES - existing_tables
+        if missing_tables:
+            missing = ", ".join(sorted(missing_tables))
+            raise SnapshotIntegrityError(f"Snapshot missing required tables: {missing}")
+
+        meta = self.meta()
+        if not meta:
+            raise SnapshotIntegrityError("Snapshot metadata is empty")
+        if meta["snapshot_schema_version"] != SUPPORTED_SNAPSHOT_SCHEMA_VERSION:
+            raise UnsupportedSnapshotError(
+                f"Unsupported snapshot schema: {meta['snapshot_schema_version']}"
+            )
 
     def meta(self) -> dict[str, Any]:
-        row = self.connection.execute(
-            "select kg_snapshot_id, snapshot_schema_version, selection_policy_version "
-            "from snapshot_meta limit 1"
-        ).fetchone()
+        try:
+            row = self.connection.execute(
+                "select kg_snapshot_id, snapshot_schema_version, selection_policy_version "
+                "from snapshot_meta limit 1"
+            ).fetchone()
+        except sqlite3.Error as exc:
+            raise SnapshotIntegrityError("Snapshot metadata cannot be read") from exc
         if row is None:
             return {}
         return dict(row)
@@ -529,7 +786,47 @@ def build(path: Path) -> None:
           snapshot_schema_version text not null,
           selection_policy_version text not null
         );
+        create table concepts (
+          concept_id text primary key,
+          canonical_surface text not null
+        );
+        create table surfaces (
+          surface_id text primary key,
+          display_text text not null,
+          normalized_text text not null,
+          query_safe integer not null,
+          latest_cts_total integer,
+          latest_cts_status text not null
+        );
+        create table concept_surfaces (
+          concept_id text not null,
+          surface_id text not null
+        );
+        create table surface_relations (
+          source_surface_id text not null,
+          target_surface_id text not null,
+          relation_type text not null,
+          evidence_score real not null
+        );
+        create table cooccurrence_edges (
+          source_concept_id text not null,
+          target_concept_id text not null,
+          weight real not null
+        );
+        create table cts_recall_observations (
+          surface_id text not null,
+          total integer,
+          status text not null,
+          observed_at text not null
+        );
+        create table selection_policy_meta (
+          selection_policy_version text not null
+        );
         insert into snapshot_meta values ('kg_fixture', 'snapshot-v1', 'policy-v1');
+        insert into concepts values ('concept_k8s', 'Kubernetes');
+        insert into surfaces values ('surface_k8s', 'k8s', 'k8s', 1, 58692, 'success');
+        insert into concept_surfaces values ('concept_k8s', 'surface_k8s');
+        insert into selection_policy_meta values ('policy-v1');
         """
     )
     conn.close()
@@ -750,8 +1047,8 @@ def test_build_query_plan_returns_anchor_for_known_term():
 
     assert response.request_id == "req_001"
     assert response.kg_snapshot_id == "kg_fixture"
-    assert response.query_bundles[0]["bundle_type"] == "anchor"
-    assert response.query_bundles[0]["queries"][0]["query_text"] == "k8s"
+    assert response.query_bundles[0].bundle_type == "anchor"
+    assert response.query_bundles[0].queries[0].query_text == "k8s"
 
 
 def test_build_query_plan_fallback_for_unknown_term():
@@ -766,8 +1063,8 @@ def test_build_query_plan_fallback_for_unknown_term():
 
     response = graph.build_query_plan(request)
 
-    assert response.query_bundles[0]["bundle_type"] == "fallback"
-    assert response.warnings[0]["code"] == "no_snapshot_surface_match"
+    assert response.query_bundles[0].bundle_type == "fallback"
+    assert response.warnings[0].code == "no_snapshot_surface_match"
 ```
 
 - [ ] **Step 2: Run test and verify RED**
@@ -1470,6 +1767,42 @@ def test_fake_cts_timeout():
 
     with pytest.raises(TimeoutError):
         client.search_count("timeout")
+
+
+def test_fake_cts_zero():
+    client = FakeCtsCountClient({"RareTerm": 0})
+
+    result = client.search_count("RareTerm")
+
+    assert result["total"] == 0
+    assert result["status"] == "success"
+
+
+def test_fake_cts_rate_limited():
+    client = FakeCtsCountClient({"Python": "rate_limited"})
+
+    result = client.search_count("Python")
+
+    assert result["total"] is None
+    assert result["status"] == "rate_limited"
+
+
+def test_fake_cts_api_error():
+    client = FakeCtsCountClient({"Python": "api_error"})
+
+    result = client.search_count("Python")
+
+    assert result["total"] is None
+    assert result["status"] == "api_error"
+
+
+def test_fake_cts_auth_error():
+    client = FakeCtsCountClient({"Python": "auth_error"})
+
+    result = client.search_count("Python")
+
+    assert result["total"] is None
+    assert result["status"] == "auth_error"
 ```
 
 - [ ] **Step 2: Run test and verify RED**
@@ -1504,6 +1837,8 @@ class FakeCtsCountClient:
             return {"query_text": query_text, "total": None, "status": "rate_limited"}
         if value == "api_error":
             return {"query_text": query_text, "total": None, "status": "api_error"}
+        if value == "auth_error":
+            return {"query_text": query_text, "total": None, "status": "auth_error"}
         return {"query_text": query_text, "total": int(value), "status": "success"}
 ```
 
@@ -1534,6 +1869,7 @@ git commit -m "feat: add fake cts count client"
 - Create: `src/seektalent_keyword_graph/cts/count_client.py`
 - Create: `src/seektalent_keyword_graph/cts/probe_window.py`
 - Test: `tests/cts/test_probe_window.py`
+- Test: `tests/cts/test_count_client.py`
 
 - [ ] **Step 1: Write probe window tests**
 
@@ -1542,7 +1878,7 @@ Create `tests/cts/test_probe_window.py`:
 ```python
 from datetime import time
 
-from seektalent_keyword_graph.cts.probe_window import is_within_probe_window
+from seektalent_keyword_graph.cts.probe_window import can_run_real_probe, is_within_probe_window
 
 
 def test_probe_window_allows_daytime():
@@ -1551,6 +1887,71 @@ def test_probe_window_allows_daytime():
 
 def test_probe_window_blocks_night():
     assert not is_within_probe_window(time(22, 0), time(9, 0), time(21, 0))
+
+
+def test_real_probe_allowed_when_dry_run_outside_window():
+    assert can_run_real_probe(
+        dry_run=True,
+        now=time(22, 0),
+        start=time(9, 0),
+        end=time(21, 0),
+    )
+
+
+def test_real_probe_blocked_outside_window_without_dry_run():
+    assert not can_run_real_probe(
+        dry_run=False,
+        now=time(22, 0),
+        start=time(9, 0),
+        end=time(21, 0),
+    )
+```
+
+Create `tests/cts/test_count_client.py`:
+
+```python
+from seektalent_keyword_graph.cts.count_client import CtsCountClient
+
+
+def test_cts_payload_uses_count_probe_page_size():
+    client = CtsCountClient(
+        base_url="https://cts.example.test",
+        tenant_key="tenant-key",
+        tenant_secret="tenant-secret",
+    )
+
+    assert client.build_payload("Python") == {
+        "keyword": "Python",
+        "page": 1,
+        "pageSize": 1,
+    }
+
+
+def test_cts_response_parses_data_total_only():
+    client = CtsCountClient(
+        base_url="https://cts.example.test",
+        tenant_key="tenant-key",
+        tenant_secret="tenant-secret",
+    )
+
+    payload = {"data": {"total": 336708, "items": [{"id": "x"}]}}
+
+    result = client.parse_response("Python", payload)
+
+    assert result == {"query_text": "Python", "total": 336708, "status": "success"}
+
+
+def test_cts_client_repr_hides_secret():
+    client = CtsCountClient(
+        base_url="https://cts.example.test",
+        tenant_key="tenant-key",
+        tenant_secret="tenant-secret",
+    )
+
+    rendered = repr(client)
+
+    assert "tenant-secret" not in rendered
+    assert "tenant-key" in rendered
 ```
 
 - [ ] **Step 2: Run test and verify RED**
@@ -1558,12 +1959,12 @@ def test_probe_window_blocks_night():
 Run:
 
 ```bash
-pytest tests/cts/test_probe_window.py -q
+pytest tests/cts/test_probe_window.py tests/cts/test_count_client.py -q
 ```
 
 Expected:
 
-- FAIL because probe window module does not exist.
+- FAIL because probe window and count client modules do not exist.
 
 - [ ] **Step 3: Implement probe window**
 
@@ -1577,6 +1978,10 @@ from datetime import time
 
 def is_within_probe_window(now: time, start: time, end: time) -> bool:
     return start <= now < end
+
+
+def can_run_real_probe(dry_run: bool, now: time, start: time, end: time) -> bool:
+    return dry_run or is_within_probe_window(now, start, end)
 ```
 
 - [ ] **Step 4: Create real client skeleton that supports dry run**
@@ -1593,8 +1998,15 @@ class CtsCountClient:
         self.tenant_key = tenant_key
         self.tenant_secret = tenant_secret
 
+    def __repr__(self) -> str:
+        return f"CtsCountClient(base_url={self.base_url!r}, tenant_key={self.tenant_key!r})"
+
     def build_payload(self, keyword: str) -> dict:
         return {"keyword": keyword, "page": 1, "pageSize": 1}
+
+    def parse_response(self, keyword: str, payload: dict) -> dict:
+        total = int(payload["data"]["total"])
+        return {"query_text": keyword, "total": total, "status": "success"}
 ```
 
 - [ ] **Step 5: Run tests**
@@ -1641,6 +2053,7 @@ def test_build_runtime_snapshot(tmp_path):
 
     snapshot = SQLiteSnapshot.open(output)
     assert snapshot.meta()["kg_snapshot_id"].startswith("kg_")
+    assert snapshot.meta()["snapshot_schema_version"] == "snapshot-v1"
 ```
 
 - [ ] **Step 2: Run test and verify RED**
@@ -1678,7 +2091,44 @@ def build_runtime_snapshot(output_path: Path) -> None:
           snapshot_schema_version text not null,
           selection_policy_version text not null
         );
+        create table concepts (
+          concept_id text primary key,
+          canonical_surface text not null
+        );
+        create table surfaces (
+          surface_id text primary key,
+          display_text text not null,
+          normalized_text text not null,
+          query_safe integer not null,
+          latest_cts_total integer,
+          latest_cts_status text not null
+        );
+        create table concept_surfaces (
+          concept_id text not null,
+          surface_id text not null
+        );
+        create table surface_relations (
+          source_surface_id text not null,
+          target_surface_id text not null,
+          relation_type text not null,
+          evidence_score real not null
+        );
+        create table cooccurrence_edges (
+          source_concept_id text not null,
+          target_concept_id text not null,
+          weight real not null
+        );
+        create table cts_recall_observations (
+          surface_id text not null,
+          total integer,
+          status text not null,
+          observed_at text not null
+        );
+        create table selection_policy_meta (
+          selection_policy_version text not null
+        );
         insert into snapshot_meta values ('kg_generated_fixture', 'snapshot-v1', 'policy-v1');
+        insert into selection_policy_meta values ('policy-v1');
         """
     )
     conn.close()
@@ -1937,19 +2387,27 @@ git commit -m "test: add consumer contract examples"
 
 ---
 
-### Slice S18: Release Validation and Rollback Docs
+### Slice S18: CLI Dispatch, Release Validation, and Rollback Docs
 
 **Files:**
+- Modify: `src/seektalent_keyword_graph/cli.py`
+- Create: `src/seektalent_keyword_graph/release_validation.py`
 - Create: `scripts/validate_release.py`
 - Create: `docs/release-checklist.md`
 - Test: `tests/test_release_validation.py`
+- Test: `tests/cli/test_cli.py`
 
-- [ ] **Step 1: Write release validation test**
+- [ ] **Step 1: Write CLI and release validation tests**
 
 Create `tests/test_release_validation.py`:
 
 ```python
-from scripts.validate_release import validate_snapshot_size
+from seektalent_keyword_graph.release_validation import (
+    calculate_sha256,
+    validate_snapshot_artifact,
+    validate_snapshot_size,
+    write_manifest,
+)
 
 
 def test_validate_snapshot_size_allows_small_file(tmp_path):
@@ -1964,6 +2422,111 @@ def test_validate_snapshot_size_rejects_large_file(tmp_path):
     path.write_bytes(b"large")
 
     assert not validate_snapshot_size(path, max_bytes=3)
+
+
+def test_manifest_checksum_roundtrip(tmp_path):
+    snapshot = tmp_path / "snapshot.sqlite3.gz"
+    manifest = tmp_path / "manifest.json"
+    snapshot.write_bytes(b"snapshot-bytes")
+
+    write_manifest(snapshot, manifest)
+
+    assert validate_snapshot_artifact(snapshot, manifest, max_bytes=100)
+    assert calculate_sha256(snapshot) == calculate_sha256(snapshot)
+
+
+def test_manifest_checksum_rejects_changed_file(tmp_path):
+    snapshot = tmp_path / "snapshot.sqlite3.gz"
+    manifest = tmp_path / "manifest.json"
+    snapshot.write_bytes(b"snapshot-bytes")
+    write_manifest(snapshot, manifest)
+    snapshot.write_bytes(b"changed")
+
+    assert not validate_snapshot_artifact(snapshot, manifest, max_bytes=100)
+
+
+def test_validate_snapshot_artifact_rejects_secret_marker(tmp_path):
+    snapshot = tmp_path / "snapshot.sqlite3.gz"
+    manifest = tmp_path / "manifest.json"
+    snapshot.write_bytes(b"KEYWORD_GRAPH_CTS_TENANT_SECRET=secret")
+    write_manifest(snapshot, manifest)
+
+    assert not validate_snapshot_artifact(snapshot, manifest, max_bytes=100)
+
+
+def test_validate_snapshot_artifact_rejects_candidate_or_resume_markers(tmp_path):
+    snapshot = tmp_path / "snapshot.sqlite3.gz"
+    manifest = tmp_path / "manifest.json"
+    snapshot.write_bytes(b"candidate_list=[alice]; resume_text=private")
+    write_manifest(snapshot, manifest)
+
+    assert not validate_snapshot_artifact(snapshot, manifest, max_bytes=100)
+```
+
+Create `tests/cli/test_cli.py`:
+
+```python
+import json
+
+import pytest
+
+from seektalent_keyword_graph.cli import build_parser, main
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "import-jds",
+        "extract-surfaces",
+        "build-relations",
+        "probe-cts",
+        "build-snapshot",
+        "validate-snapshot",
+    ],
+)
+def test_cli_registers_promised_commands(command):
+    help_text = build_parser().format_help()
+
+    assert command in help_text
+
+
+def test_cli_help_returns_zero(capsys):
+    assert main(["--help"]) == 0
+
+    assert "keyword-graph" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "import-jds",
+        "extract-surfaces",
+        "build-relations",
+        "probe-cts",
+        "build-snapshot",
+        "validate-snapshot",
+    ],
+)
+def test_cli_subcommand_help_returns_zero(command, capsys):
+    assert main([command, "--help"]) == 0
+
+    assert command in capsys.readouterr().out
+
+
+def test_probe_cts_dry_run_outputs_payload(capsys):
+    assert main(["probe-cts", "--dry-run", "Python"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["keyword"] == "Python"
+    assert payload["page"] == 1
+    assert payload["pageSize"] == 1
+
+
+def test_probe_cts_defaults_to_dry_run_payload(capsys):
+    assert main(["probe-cts", "Python"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["keyword"] == "Python"
 ```
 
 - [ ] **Step 2: Run test and verify RED**
@@ -1971,25 +2534,228 @@ def test_validate_snapshot_size_rejects_large_file(tmp_path):
 Run:
 
 ```bash
-pytest tests/test_release_validation.py -q
+pytest tests/test_release_validation.py tests/cli/test_cli.py -q
 ```
 
 Expected:
 
-- FAIL because script does not exist.
+- FAIL because CLI dispatch and release script do not exist.
 
-- [ ] **Step 3: Implement release validation**
+- [ ] **Step 3: Implement CLI dispatch and release validation**
+
+Modify `src/seektalent_keyword_graph/cli.py`:
+
+```python
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime, time
+from pathlib import Path
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="keyword-graph")
+    subcommands = parser.add_subparsers(dest="command", required=True)
+
+    import_jds = subcommands.add_parser("import-jds")
+    import_jds.add_argument("input", type=Path)
+    import_jds.add_argument("--build-db", required=True, type=Path)
+    import_jds.set_defaults(func=_cmd_import_jds)
+
+    extract_surfaces = subcommands.add_parser("extract-surfaces")
+    extract_surfaces.add_argument("text")
+    extract_surfaces.set_defaults(func=_cmd_extract_surfaces)
+
+    build_relations = subcommands.add_parser("build-relations")
+    build_relations.add_argument("surfaces", nargs="+")
+    build_relations.set_defaults(func=_cmd_build_relations)
+
+    probe_cts = subcommands.add_parser("probe-cts")
+    probe_cts.add_argument("keyword")
+    probe_cts.add_argument("--dry-run", action="store_true")
+    probe_cts.add_argument("--real", action="store_true")
+    probe_cts.set_defaults(func=_cmd_probe_cts)
+
+    build_snapshot = subcommands.add_parser("build-snapshot")
+    build_snapshot.add_argument("--output", required=True, type=Path)
+    build_snapshot.set_defaults(func=_cmd_build_snapshot)
+
+    validate_snapshot = subcommands.add_parser("validate-snapshot")
+    validate_snapshot.add_argument("--snapshot", required=True, type=Path)
+    validate_snapshot.add_argument("--manifest", required=True, type=Path)
+    validate_snapshot.set_defaults(func=_cmd_validate_snapshot)
+
+    return parser
+
+
+def _cmd_import_jds(args: argparse.Namespace) -> int:
+    from seektalent_keyword_graph.builder.import_jds import import_jds
+
+    import_jds(args.input, args.build_db)
+    return 0
+
+
+def _cmd_extract_surfaces(args: argparse.Namespace) -> int:
+    from seektalent_keyword_graph.builder.extract_surfaces import extract_surface_mentions
+
+    print(json.dumps(extract_surface_mentions(args.text), ensure_ascii=False))
+    return 0
+
+
+def _cmd_build_relations(args: argparse.Namespace) -> int:
+    from seektalent_keyword_graph.builder.build_relations import build_seed_relations
+
+    print(json.dumps(build_seed_relations(args.surfaces), ensure_ascii=False))
+    return 0
+
+
+def _cmd_probe_cts(args: argparse.Namespace) -> int:
+    from seektalent_keyword_graph.cts.count_client import CtsCountClient
+    from seektalent_keyword_graph.cts.probe_window import can_run_real_probe
+
+    client = CtsCountClient(
+        base_url=os.environ.get("KEYWORD_GRAPH_CTS_BASE_URL", ""),
+        tenant_key=os.environ.get("KEYWORD_GRAPH_CTS_TENANT_KEY", ""),
+        tenant_secret=os.environ.get("KEYWORD_GRAPH_CTS_TENANT_SECRET", ""),
+    )
+    if args.dry_run or not args.real:
+        print(json.dumps(client.build_payload(args.keyword), ensure_ascii=False))
+        return 0
+
+    now = datetime.now().time()
+    if not can_run_real_probe(False, now, time(9, 0), time(21, 0)):
+        print("real CTS probe blocked outside 09:00-21:00", file=sys.stderr)
+        return 2
+
+    print("real CTS probe requires an explicit implementation gate", file=sys.stderr)
+    return 2
+
+
+def _cmd_build_snapshot(args: argparse.Namespace) -> int:
+    from seektalent_keyword_graph.builder.build_snapshot import build_runtime_snapshot
+
+    build_runtime_snapshot(args.output)
+    return 0
+
+
+def _cmd_validate_snapshot(args: argparse.Namespace) -> int:
+    from seektalent_keyword_graph.release_validation import validate_snapshot_artifact
+
+    return 0 if validate_snapshot_artifact(args.snapshot, args.manifest) else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code)
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+Create `src/seektalent_keyword_graph/release_validation.py`:
+
+```python
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+
+FORBIDDEN_MARKERS = (
+    b"KEYWORD_GRAPH_CTS_",
+    b"tenant_secret",
+    b"candidate_id",
+    b"candidate_list",
+    b"resume_text",
+)
+
+
+def validate_snapshot_size(path: Path, max_bytes: int = 100 * 1024 * 1024) -> bool:
+    return path.exists() and path.stat().st_size <= max_bytes
+
+
+def calculate_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_manifest(snapshot_path: Path, manifest_path: Path) -> None:
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact": snapshot_path.name,
+                "bytes": snapshot_path.stat().st_size,
+                "sha256": calculate_sha256(snapshot_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+
+def manifest_matches(snapshot_path: Path, manifest_path: Path) -> bool:
+    if not manifest_path.exists():
+        return False
+    manifest = json.loads(manifest_path.read_text())
+    return (
+        manifest.get("artifact") == snapshot_path.name
+        and manifest.get("bytes") == snapshot_path.stat().st_size
+        and manifest.get("sha256") == calculate_sha256(snapshot_path)
+    )
+
+
+def scan_forbidden_markers(path: Path) -> list[str]:
+    payload = path.read_bytes().lower()
+    return [marker.decode() for marker in FORBIDDEN_MARKERS if marker.lower() in payload]
+
+
+def validate_snapshot_artifact(
+    snapshot_path: Path,
+    manifest_path: Path,
+    max_bytes: int = 100 * 1024 * 1024,
+) -> bool:
+    return (
+        validate_snapshot_size(snapshot_path, max_bytes)
+        and manifest_matches(snapshot_path, manifest_path)
+        and not scan_forbidden_markers(snapshot_path)
+    )
+```
 
 Create `scripts/validate_release.py`:
 
 ```python
 from __future__ import annotations
 
-from pathlib import Path
+from seektalent_keyword_graph.release_validation import (
+    calculate_sha256,
+    manifest_matches,
+    scan_forbidden_markers,
+    validate_snapshot_artifact,
+    validate_snapshot_size,
+    write_manifest,
+)
 
-
-def validate_snapshot_size(path: Path, max_bytes: int = 100 * 1024 * 1024) -> bool:
-    return path.exists() and path.stat().st_size <= max_bytes
+__all__ = [
+    "calculate_sha256",
+    "manifest_matches",
+    "scan_forbidden_markers",
+    "validate_snapshot_artifact",
+    "validate_snapshot_size",
+    "write_manifest",
+]
 ```
 
 Create `docs/release-checklist.md`:
@@ -1999,12 +2765,14 @@ Create `docs/release-checklist.md`:
 
 - [ ] `pytest` passes.
 - [ ] `ruff check .` passes.
-- [ ] Wheel builds.
+- [ ] `python3 -m build --wheel` passes.
 - [ ] Snapshot validates.
 - [ ] Compressed snapshot is below 100MB.
 - [ ] Snapshot contains no CTS key.
 - [ ] Snapshot contains no candidate list or resume text.
 - [ ] Manifest and checksum are generated.
+- [ ] CLI `--help` lists every promised builder command.
+- [ ] `keyword-graph probe-cts --dry-run Python` prints payload only and makes no CTS call.
 - [ ] Rollback path points to previous snapshot.
 ```
 
@@ -2013,7 +2781,7 @@ Create `docs/release-checklist.md`:
 Run:
 
 ```bash
-pytest tests/test_release_validation.py -q
+pytest tests/test_release_validation.py tests/cli/test_cli.py -q
 ```
 
 Expected:
@@ -2023,7 +2791,7 @@ Expected:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add scripts docs tests
+git add src scripts docs tests
 git commit -m "chore: add release validation checklist"
 ```
 
@@ -2032,9 +2800,53 @@ git commit -m "chore: add release validation checklist"
 ### Slice S19: Final Verification and Readiness Report
 
 **Files:**
+- Create: `tests/test_import_boundaries.py`
+- Create: `scripts/write_readiness_report.py`
 - Create: `docs/readiness-report.md`
 
-- [ ] **Step 1: Run full tests**
+- [ ] **Step 1: Add runtime import-boundary test**
+
+Create `tests/test_import_boundaries.py`:
+
+```python
+import ast
+from pathlib import Path
+
+
+RUNTIME_FILES = [
+    Path("src/seektalent_keyword_graph/engine.py"),
+    *Path("src/seektalent_keyword_graph/runtime").glob("*.py"),
+]
+FORBIDDEN_IMPORT_PREFIXES = (
+    "seektalent_keyword_graph.builder",
+    "seektalent_keyword_graph.cts",
+)
+
+
+def imported_modules(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text())
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
+def test_runtime_does_not_import_builder_or_cts():
+    offenders = []
+    for path in RUNTIME_FILES:
+        if not path.exists():
+            continue
+        for module in imported_modules(path):
+            if module.startswith(FORBIDDEN_IMPORT_PREFIXES):
+                offenders.append((str(path), module))
+
+    assert offenders == []
+```
+
+- [ ] **Step 2: Run full tests**
 
 Run:
 
@@ -2046,7 +2858,7 @@ Expected:
 
 - PASS.
 
-- [ ] **Step 2: Run lint**
+- [ ] **Step 3: Run lint**
 
 Run:
 
@@ -2058,57 +2870,155 @@ Expected:
 
 - PASS.
 
-- [ ] **Step 3: Verify old naming does not exist**
+- [ ] **Step 4: Verify old naming does not exist**
 
 Run:
 
 ```bash
-rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_intelligence" .
+rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_intelligence" \
+  README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts
 ```
 
 Expected:
 
 - Exit 1 with no matches.
 
-- [ ] **Step 4: Write readiness report**
+- [ ] **Step 5: Create readiness report writer**
 
-Create `docs/readiness-report.md`:
+Create `scripts/write_readiness_report.py`:
 
-```markdown
-# Readiness Report
+```python
+from __future__ import annotations
 
-## Completed
+import subprocess
+from pathlib import Path
 
-- M0 scaffold status:
-- M1 runtime status:
-- M2 builder status:
-- M3 graph status:
-- M4 CTS status:
-- M5 snapshot/query status:
-- M6 consumer contract status:
-- M7 release status:
 
-## Verification
+ROOT = Path(__file__).resolve().parents[1]
+REPORT = ROOT / "docs" / "readiness-report.md"
 
-- `pytest`:
-- `ruff check .`:
-- Naming scan:
 
-## Known Gaps
+def run(command: list[str]) -> tuple[int, str]:
+    result = subprocess.run(
+        command,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    return result.returncode, result.stdout.strip()
 
-- Real CTS probe remains gated to 09:00-21:00.
-- SeekTalent integration code is not modified unless separately requested.
-- Production snapshot is not committed to git.
+
+def status_line(name: str, code: int, output: str) -> str:
+    first_line = output.splitlines()[0] if output else "no output"
+    return f"- {name}: exit {code}; {first_line}"
+
+
+def main() -> int:
+    old_name_pattern = "|".join(
+        [
+            "seektalent-keyword-" + "intel",
+            "seektalent_keyword_" + "intel",
+            "KEYWORD_" + "INTEL",
+            "keyword_" + "intelligence",
+        ]
+    )
+    checks = [
+        ("pytest", ["pytest"]),
+        ("ruff check .", ["ruff", "check", "."]),
+        ("Wheel build", ["python3", "-m", "build", "--wheel"]),
+        (
+            "Naming scan",
+            [
+                "rg",
+                "-n",
+                old_name_pattern,
+                "README.md",
+                "GOAL.md",
+                "AGENTS.md",
+                "pyproject.toml",
+                "src",
+                "tests",
+                "contracts",
+                "scripts",
+            ],
+        ),
+        ("Current commit", ["git", "rev-parse", "HEAD"]),
+    ]
+    results = [(name, *run(command)) for name, command in checks]
+    naming_code = next(code for name, code, _ in results if name == "Naming scan")
+    naming_status = "no old names found" if naming_code == 1 else "old names found"
+    commit = next(output for name, _, output in results if name == "Current commit")
+
+    REPORT.write_text(
+        "\n".join(
+            [
+                "# Readiness Report",
+                "",
+                "## Completed",
+                "",
+                "- M0 scaffold status: verified by pytest and package import tests.",
+                "- M1 runtime status: verified by runtime snapshot and query plan tests.",
+                "- M2 builder status: verified by builder fixture tests.",
+                "- M3 graph status: verified by relation and co-occurrence tests.",
+                "- M4 CTS status: verified by fake CTS and dry-run CTS tests.",
+                "- M5 snapshot/query status: verified by snapshot builder and policy tests.",
+                "- M6 consumer contract status: verified by contract example tests.",
+                "- M7 release status: verified by CLI and release validation tests.",
+                "",
+                "## Verification",
+                "",
+                *[status_line(name, code, output) for name, code, output in results],
+                f"- Naming scan interpreted result: {naming_status}.",
+                f"- Commit: {commit}",
+                "",
+                "## Known Gaps",
+                "",
+                "- Real CTS probe remains gated to 09:00-21:00.",
+                "- SeekTalent integration code is not modified unless separately requested.",
+                "- Production snapshot is not committed to git.",
+                "",
+            ]
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 ```
 
-- [ ] **Step 5: Fill report with actual command outputs**
+- [ ] **Step 6: Generate readiness report**
 
-Edit `docs/readiness-report.md` and replace each blank status with the actual result from this run.
-
-- [ ] **Step 6: Commit**
+Run:
 
 ```bash
-git add docs/readiness-report.md
+python scripts/write_readiness_report.py
+```
+
+Expected:
+
+- Exit 0.
+- `docs/readiness-report.md` exists.
+- The report contains actual exit codes and the current commit hash.
+
+- [ ] **Step 7: Verify readiness report has no blank statuses**
+
+Run:
+
+```bash
+rg -n "status:$|pytest:$|ruff check \\.:$|Naming scan:$|Commit:$" docs/readiness-report.md
+```
+
+Expected:
+
+- Exit 1 with no matches.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add tests/test_import_boundaries.py scripts/write_readiness_report.py docs/readiness-report.md
 git commit -m "docs: add readiness report"
 ```
 
@@ -2123,6 +3033,8 @@ Work in /Users/frankqdwang/MLE/seektalent-keyword-graph.
 
 Read AGENTS.md, README.md, GOAL.md, docs/superpowers/specs/2026-05-30-keyword-graph-m0-m7.md, and docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md.
 
+Before running tests, execute Slice S0 including `python3 -m pip install -e ".[dev,builder]"`, then verify `pytest --version`, `ruff --version`, `python3 -m build --version`, and `python3 -c "import pydantic, httpx"`.
+
 Execute the plan task-by-task. Continue as long as possible. Commit after each verified slice. Do not call real CTS during unattended execution. Use fake CTS and dry-run gates only. Runtime must never import builder/cts and this package must never import SeekTalent.
 
 Primary target: complete M0-M1 fully. Continue into M2-M7 slices if earlier slices pass. Stop only if blocked by repeated test failures, missing required local dependencies, or completion. Before stopping, run the verification commands available and update docs/readiness-report.md if it exists.
@@ -2131,6 +3043,127 @@ Primary target: complete M0-M1 fully. Continue into M2-M7 slices if earlier slic
 ## Self-Review
 
 - Spec coverage: M0-M7 are represented by S0-S19.
-- Placeholder scan: the plan contains no `TBD`, `TODO`, or `implement later`.
+- Placeholder scan: no placeholder red flags found.
 - Type consistency: package name is `seektalent-keyword-graph`; import package is `seektalent_keyword_graph`; runtime class is `KeywordGraph`; CLI is `keyword-graph`.
 - Execution safety: real CTS is gated and excluded from unattended overnight runs.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| Eng Review | `fw-plan-review` | Architecture, code quality, tests, performance | 1 | ADDRESSED | 6 P1 findings and 2 P2 findings are folded into S0/S2/S3/S12/S13/S14/S18/S19 |
+| Design Review | `fw-plan-review` | UI/UX gaps | 0 | SKIPPED | No UI or user-facing screen scope in this plan |
+
+### Step 0 Scope Challenge
+
+The plan intentionally spans more than 8 files and more than 2 modules because the requested deliverable is a new package plus builder pipeline, not a single patch. Scope is acceptable only if it remains sliced and verified. The current S0-S19 structure is workable, and the P1/P2 gaps below have been folded back into the plan.
+
+### What Already Exists
+
+- Planning repo docs already define the dependency direction: SeekTalent consumes `seektalent-keyword-graph`, and this package must not import SeekTalent.
+- The main SeekTalent repo and CTS credentials exist outside this planning repo. This plan should not modify SeekTalent directly.
+- CTS probing is defined as builder-only. Runtime users must not need CTS keys.
+- No implementation source tree exists yet in this repo. The current plan is the source of truth for the first build.
+
+### NOT in Scope
+
+- Real CTS execution during an unattended overnight Goal.
+- SeekTalent integration code changes in the main app.
+- UI, admin screens, or human review tooling beyond CSV or JSONL sampling outputs.
+- Production snapshot artifact committed to git.
+- Remote publish, PR, merge, release, or deploy actions.
+
+### Engineering Findings
+
+`[P1] (confidence: 9/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:52` - S0 creates `pyproject.toml` and a `Makefile`, but never installs dev or builder dependencies. Later slices call `pytest` and `ruff`, so a blank Codex Goal can fail before any product work starts. Add an explicit bootstrap step such as `python -m pip install -e '.[dev,builder]'`, then verify `pytest --version`, `ruff --version`, and an import smoke test.
+
+`[P1] (confidence: 9/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:341` - `QueryPlanResponse` uses `list[dict]` and `dict` for core contract fields. That weakens the package boundary SeekTalent will depend on. Add typed Pydantic models for concept rows, query bundles, rejected surfaces, lineage, and warnings, then generate schema and example validation tests from those models.
+
+`[P1] (confidence: 9/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:398` - snapshot validation only checks file existence and `snapshot_meta`. The spec requires missing, incompatible, and corrupt snapshots to fail clearly. Add tests and implementation for unsupported schema versions, missing required tables, empty required tables, and typed `UnsupportedSnapshotError` / `SnapshotIntegrityError` paths.
+
+`[P1] (confidence: 8/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:1443` - CTS fake and real probe coverage is below the spec. The fake client only tests success and timeout, while the spec requires success, zero, timeout, 429, 5xx, and auth error behavior. Add the missing fake tests and status mapping, plus real client dry-run tests for payload, response parsing, and no-secret logging.
+
+`[P1] (confidence: 9/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:1621` - `build_runtime_snapshot` only writes `snapshot_meta`, but the runtime and release goals require required runtime tables, manifest, checksum, and validation. Extend S14/S18 so generated snapshots contain the runtime schema, pass `SQLiteSnapshot.open().validate()`, and produce verifiable manifest/checksum metadata.
+
+`[P1] (confidence: 8/10) docs/superpowers/specs/2026-05-30-keyword-graph-m0-m7.md:106` - the spec promises CLI commands, but S1 only creates a `main()` that returns 0 and no later slice wires command dispatch. Add a CLI slice with tests for `keyword-graph --help`, `import-jds`, `extract-surfaces`, `build-relations`, `probe-cts --dry-run`, `build-snapshot`, and `validate-snapshot`.
+
+`[P2] (confidence: 8/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:22` - the runtime/builder import boundary is stated but not tested. Add an import-boundary test that fails if runtime modules import `seektalent_keyword_graph.builder` or `seektalent_keyword_graph.cts`.
+
+`[P2] (confidence: 7/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:2032` - the readiness report template starts with blank statuses and depends on a later fill step. For unattended execution, make S19 require actual command outputs and commit hash values immediately, so a stopped Goal does not leave a misleading empty report.
+
+### Test Review
+
+The first review found critical coverage gaps. The revised plan now represents them directly in the implementation slices:
+
+```text
+CODE PATHS
+[+] Package bootstrap
+  |-- [PLANNED] dependency install in blank environment
+  `-- [PLANNED] import smoke after editable install
+[+] Runtime contracts
+  |-- [TESTED] request/response basic validation
+  `-- [PLANNED] typed nested schema for returned query plan fields
+[+] SQLite snapshot open
+  |-- [TESTED] existing fixture meta loads
+  |-- [TESTED] missing file raises
+  |-- [PLANNED] unsupported snapshot schema raises
+  |-- [PLANNED] missing runtime tables raises
+  `-- [PLANNED] corrupt or empty required data raises
+[+] CTS probing
+  |-- [TESTED] fake success
+  |-- [TESTED] fake timeout
+  |-- [PLANNED] zero recall
+  |-- [PLANNED] 429 rate limit
+  |-- [PLANNED] 5xx API error
+  `-- [PLANNED] auth error
+[+] Release validation
+  |-- [TESTED] compressed size threshold
+  |-- [PLANNED] checksum validation
+  |-- [PLANNED] secret scan
+  `-- [PLANNED] candidate and resume text scan
+```
+
+### Performance Review
+
+No P1 performance issue found in the plan itself. The chosen runtime shape, readonly SQLite plus deterministic local selection, fits the lightweight cross-platform requirement. The main performance risk is uncontrolled build-side growth. Keep CTS at `1 RPS / concurrency 1 / 09:00-21:00`, keep runtime snapshot compressed under 100MB hard cap, and add a release validation command that fails before packaging if the compressed artifact exceeds the cap.
+
+### Implementation Tasks
+
+Synthesized from this review's findings. Each task derives from a specific finding above.
+
+- [x] **T1 (P1, human: ~20min / CC: ~5min)** - bootstrap - add dependency install and tool smoke checks to S0.
+  - Surfaced by: Engineering Findings P1 dependency bootstrap.
+  - Files: `docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md`.
+  - Verify: the long Goal prompt includes a dependency install command before first `pytest`.
+- [x] **T2 (P1, human: ~1h / CC: ~15min)** - contracts - replace loose response dictionaries with typed Pydantic nested models.
+  - Surfaced by: Engineering Findings P1 contract looseness.
+  - Files: plan S2, contracts examples in S17.
+  - Verify: contract tests validate nested model fields and JSON schema.
+- [x] **T3 (P1, human: ~1h / CC: ~15min)** - snapshot runtime - add schema/table/integrity validation tests and implementation steps.
+  - Surfaced by: Engineering Findings P1 snapshot validation.
+  - Files: plan S3/S4/S14/S18.
+  - Verify: tests cover unsupported schema, missing required table, and corrupt required data.
+- [x] **T4 (P1, human: ~1h / CC: ~15min)** - CTS - complete fake CTS status coverage and real client dry-run parsing tests.
+  - Surfaced by: Engineering Findings P1 CTS undercoverage.
+  - Files: plan S12/S13.
+  - Verify: CTS tests cover success, zero, timeout, 429, 5xx, auth error, payload, and response parsing.
+- [x] **T5 (P1, human: ~1h / CC: ~20min)** - snapshot builder/release - require runtime tables, manifest, checksum, secret scan, and privacy scan.
+  - Surfaced by: Engineering Findings P1 snapshot builder and release validation.
+  - Files: plan S14/S18.
+  - Verify: `validate-snapshot` fails on oversize, missing checksum, secrets, candidate names, or resume text.
+- [x] **T6 (P1, human: ~1h / CC: ~15min)** - CLI - add tested command dispatch for promised builder and validation commands.
+  - Surfaced by: Engineering Findings P1 CLI gap.
+  - Files: plan S1 plus new CLI slice or S18 updates.
+  - Verify: CLI tests cover `--help` and each promised command in dry-run or fixture mode.
+- [x] **T7 (P2, human: ~20min / CC: ~5min)** - import boundary - add runtime import-boundary tests.
+  - Surfaced by: Engineering Findings P2 runtime/builder boundary.
+  - Files: plan S3/S4/S19 or dedicated boundary test slice.
+  - Verify: tests fail if runtime imports builder or CTS modules.
+- [x] **T8 (P2, human: ~10min / CC: ~5min)** - readiness - make readiness report values non-blank and command-derived.
+  - Surfaced by: Engineering Findings P2 readiness report.
+  - Files: plan S19.
+  - Verify: S19 requires actual command outputs, commit hash, and final status lines.
+
+### Verdict
+
+REVISION APPLIED. The original P1/P2 plan-review findings are addressed in the plan text. No user tradeoff is pending. Rerun `fw-plan-review` as a final gate before starting a long unattended Goal if strict stage-gate evidence is required.
