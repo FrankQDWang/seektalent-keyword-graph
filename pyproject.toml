@@ -1,0 +1,40 @@
+[project]
+name = "seektalent-keyword-graph"
+version = "0.1.0"
+description = "Lightweight keyword graph package and snapshot builder for SeekTalent."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "pytest>=8.0",
+  "ruff>=0.5",
+]
+builder = [
+  "httpx>=0.27",
+]
+
+[project.scripts]
+keyword-graph = "seektalent_keyword_graph.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["README.md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
