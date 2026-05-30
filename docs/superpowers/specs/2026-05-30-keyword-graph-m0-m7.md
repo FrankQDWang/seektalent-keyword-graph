@@ -168,12 +168,12 @@ Create a real Python package project with test and lint commands.
 Acceptance:
 
 - `python -c "import seektalent_keyword_graph"` succeeds.
-- Editable install with dev and builder extras succeeds.
-- `python -m build --version` succeeds.
-- `pytest --version` succeeds.
-- `ruff --version` succeeds.
-- `pytest` succeeds.
-- `ruff check .` succeeds.
+- `uv sync --extra dev --extra builder` succeeds.
+- `uv run python -m build --version` succeeds.
+- `uv run pytest --version` succeeds.
+- `uv run ruff --version` succeeds.
+- `uv run pytest` succeeds.
+- `uv run ruff check .` succeeds.
 - Package metadata name is `seektalent-keyword-graph`.
 - No real CTS call exists.
 

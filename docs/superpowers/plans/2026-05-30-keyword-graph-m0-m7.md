@@ -21,7 +21,7 @@
 - Real CTS work is builder-only and must respect `1 RPS / 并发 1 / 09:00-21:00`.
 - Runtime code must never import `seektalent_keyword_graph.builder` or `seektalent_keyword_graph.cts`.
 - SeekTalent is a consumer. This package must not import SeekTalent.
-- A blank Goal runner must install editable dev and builder dependencies before running tests.
+- A blank Goal runner must sync the uv environment before running tests.
 
 ## Slice Checklist
 
@@ -109,10 +109,10 @@ Use this content:
 .PHONY: test lint check
 
 test:
-	pytest
+	uv run pytest
 
 lint:
-	ruff check .
+	uv run ruff check .
 
 check: lint test
 ```
@@ -125,18 +125,18 @@ Use this content:
 3.12
 ```
 
-- [ ] **Step 4: Install editable dev and builder dependencies**
+- [ ] **Step 4: Sync uv dev and builder dependencies**
 
 Run:
 
 ```bash
-python3 -m pip install -e ".[dev,builder]"
+uv sync --extra dev --extra builder
 ```
 
 Expected:
 
 - Exit 0.
-- `seektalent-keyword-graph` is installed in editable mode.
+- `seektalent-keyword-graph` is available in the uv environment.
 - `build`, `pytest`, `ruff`, `pydantic`, and `httpx` are available for later slices.
 
 - [ ] **Step 5: Run scaffold verification**
@@ -144,12 +144,12 @@ Expected:
 Run:
 
 ```bash
-python3 -m pip --version
-pytest --version
-ruff --version
-python3 -m build --version
-python3 -c "import pydantic, httpx"
-python3 -m compileall -q .
+uv --version
+uv run pytest --version
+uv run ruff --version
+uv run python -m build --version
+uv run python -c "import pydantic, httpx"
+uv run python -m compileall -q .
 ```
 
 Expected:
@@ -190,7 +190,7 @@ def test_package_imports():
 Run:
 
 ```bash
-pytest tests/test_import.py -q
+uv run pytest tests/test_import.py -q
 ```
 
 Expected:
@@ -243,7 +243,7 @@ def main() -> int:
 Run:
 
 ```bash
-pytest tests/test_import.py -q
+uv run pytest tests/test_import.py -q
 ```
 
 Expected:
@@ -355,7 +355,7 @@ def test_query_plan_response_shape():
 Run:
 
 ```bash
-pytest tests/contracts/test_query_plan_contract.py -q
+uv run pytest tests/contracts/test_query_plan_contract.py -q
 ```
 
 Expected:
@@ -488,7 +488,7 @@ __all__ = ["KeywordGraph", "QueryPlanRequest", "QueryPlanResponse", "__version__
 Run:
 
 ```bash
-pytest tests/contracts/test_query_plan_contract.py -q
+uv run pytest tests/contracts/test_query_plan_contract.py -q
 ```
 
 Expected:
@@ -651,7 +651,7 @@ def test_empty_snapshot_meta_raises(tmp_path):
 Run:
 
 ```bash
-pytest tests/runtime/test_sqlite_snapshot.py -q
+uv run pytest tests/runtime/test_sqlite_snapshot.py -q
 ```
 
 Expected:
@@ -851,7 +851,7 @@ Expected:
 Run:
 
 ```bash
-pytest tests/runtime/test_sqlite_snapshot.py -q
+uv run pytest tests/runtime/test_sqlite_snapshot.py -q
 ```
 
 Expected:
@@ -907,7 +907,7 @@ def test_get_concept():
 Run:
 
 ```bash
-pytest tests/runtime/test_keyword_graph_lookup.py -q
+uv run pytest tests/runtime/test_keyword_graph_lookup.py -q
 ```
 
 Expected:
@@ -998,7 +998,7 @@ class KeywordGraph:
 Run:
 
 ```bash
-pytest tests/runtime/test_keyword_graph_lookup.py tests/runtime/test_sqlite_snapshot.py -q
+uv run pytest tests/runtime/test_keyword_graph_lookup.py tests/runtime/test_sqlite_snapshot.py -q
 ```
 
 Expected:
@@ -1072,7 +1072,7 @@ def test_build_query_plan_fallback_for_unknown_term():
 Run:
 
 ```bash
-pytest tests/runtime/test_build_query_plan.py -q
+uv run pytest tests/runtime/test_build_query_plan.py -q
 ```
 
 Expected:
@@ -1146,7 +1146,7 @@ Add this method to `KeywordGraph` in `src/seektalent_keyword_graph/engine.py`:
 Run:
 
 ```bash
-pytest tests/runtime/test_build_query_plan.py tests/runtime -q
+uv run pytest tests/runtime/test_build_query_plan.py tests/runtime -q
 ```
 
 Expected:
@@ -1201,7 +1201,7 @@ def test_import_jds(tmp_path):
 Run:
 
 ```bash
-pytest tests/builder/test_import_jds.py -q
+uv run pytest tests/builder/test_import_jds.py -q
 ```
 
 Expected:
@@ -1278,7 +1278,7 @@ def import_jds(jsonl_path: Path, db_path: Path) -> int:
 Run:
 
 ```bash
-pytest tests/builder/test_import_jds.py -q
+uv run pytest tests/builder/test_import_jds.py -q
 ```
 
 Expected:
@@ -1321,7 +1321,7 @@ def test_split_requirement_section():
 Run:
 
 ```bash
-pytest tests/builder/test_sections.py -q
+uv run pytest tests/builder/test_sections.py -q
 ```
 
 Expected:
@@ -1367,7 +1367,7 @@ def split_sections(text: str) -> list[dict]:
 Run:
 
 ```bash
-pytest tests/builder/test_sections.py -q
+uv run pytest tests/builder/test_sections.py -q
 ```
 
 Expected:
@@ -1417,7 +1417,7 @@ def test_blocks_company_like_terms():
 Run:
 
 ```bash
-pytest tests/builder/test_extract_surfaces.py -q
+uv run pytest tests/builder/test_extract_surfaces.py -q
 ```
 
 Expected:
@@ -1467,7 +1467,7 @@ def extract_surface_mentions(text: str) -> list[dict]:
 Run:
 
 ```bash
-pytest tests/builder/test_extract_surfaces.py -q
+uv run pytest tests/builder/test_extract_surfaces.py -q
 ```
 
 Expected:
@@ -1510,7 +1510,7 @@ def test_normalize_preserves_symbols():
 Run:
 
 ```bash
-pytest tests/domain/test_normalization.py -q
+uv run pytest tests/domain/test_normalization.py -q
 ```
 
 Expected:
@@ -1537,7 +1537,7 @@ def normalize_surface(value: str) -> str:
 Run:
 
 ```bash
-pytest tests/domain/test_normalization.py -q
+uv run pytest tests/domain/test_normalization.py -q
 ```
 
 Expected:
@@ -1588,7 +1588,7 @@ def test_vue_and_react_do_not_merge():
 Run:
 
 ```bash
-pytest tests/builder/test_build_relations.py -q
+uv run pytest tests/builder/test_build_relations.py -q
 ```
 
 Expected:
@@ -1622,7 +1622,7 @@ def build_seed_relations(surfaces: list[str]) -> list[dict]:
 Run:
 
 ```bash
-pytest tests/builder/test_build_relations.py -q
+uv run pytest tests/builder/test_build_relations.py -q
 ```
 
 Expected:
@@ -1672,7 +1672,7 @@ def test_sampling_rows_include_risk_reason():
 Run:
 
 ```bash
-pytest tests/builder/test_reports.py -q
+uv run pytest tests/builder/test_reports.py -q
 ```
 
 Expected:
@@ -1721,7 +1721,7 @@ def build_sampling_rows(items: list[dict]) -> list[dict]:
 Run:
 
 ```bash
-pytest tests/builder/test_reports.py -q
+uv run pytest tests/builder/test_reports.py -q
 ```
 
 Expected:
@@ -1810,7 +1810,7 @@ def test_fake_cts_auth_error():
 Run:
 
 ```bash
-pytest tests/cts/test_fake_client.py -q
+uv run pytest tests/cts/test_fake_client.py -q
 ```
 
 Expected:
@@ -1847,7 +1847,7 @@ class FakeCtsCountClient:
 Run:
 
 ```bash
-pytest tests/cts/test_fake_client.py -q
+uv run pytest tests/cts/test_fake_client.py -q
 ```
 
 Expected:
@@ -1959,7 +1959,7 @@ def test_cts_client_repr_hides_secret():
 Run:
 
 ```bash
-pytest tests/cts/test_probe_window.py tests/cts/test_count_client.py -q
+uv run pytest tests/cts/test_probe_window.py tests/cts/test_count_client.py -q
 ```
 
 Expected:
@@ -2014,7 +2014,7 @@ class CtsCountClient:
 Run:
 
 ```bash
-pytest tests/cts -q
+uv run pytest tests/cts -q
 ```
 
 Expected:
@@ -2061,7 +2061,7 @@ def test_build_runtime_snapshot(tmp_path):
 Run:
 
 ```bash
-pytest tests/builder/test_build_snapshot.py -q
+uv run pytest tests/builder/test_build_snapshot.py -q
 ```
 
 Expected:
@@ -2139,7 +2139,7 @@ def build_runtime_snapshot(output_path: Path) -> None:
 Run:
 
 ```bash
-pytest tests/builder/test_build_snapshot.py -q
+uv run pytest tests/builder/test_build_snapshot.py -q
 ```
 
 Expected:
@@ -2186,7 +2186,7 @@ def test_recall_bucket_healthy():
 Run:
 
 ```bash
-pytest tests/domain/test_policies.py -q
+uv run pytest tests/domain/test_policies.py -q
 ```
 
 Expected:
@@ -2218,7 +2218,7 @@ def recall_bucket(total: int | None) -> str:
 Run:
 
 ```bash
-pytest tests/domain/test_policies.py -q
+uv run pytest tests/domain/test_policies.py -q
 ```
 
 Expected:
@@ -2265,7 +2265,7 @@ def test_summarize_replay():
 Run:
 
 ```bash
-pytest tests/observability/test_replay_report.py -q
+uv run pytest tests/observability/test_replay_report.py -q
 ```
 
 Expected:
@@ -2290,7 +2290,7 @@ def summarize_replay(results: list[dict]) -> dict:
 Run:
 
 ```bash
-pytest tests/observability/test_replay_report.py -q
+uv run pytest tests/observability/test_replay_report.py -q
 ```
 
 Expected:
@@ -2371,7 +2371,7 @@ def test_response_example_validates():
 Run:
 
 ```bash
-pytest tests/contracts -q
+uv run pytest tests/contracts -q
 ```
 
 Expected:
@@ -2534,7 +2534,7 @@ def test_probe_cts_defaults_to_dry_run_payload(capsys):
 Run:
 
 ```bash
-pytest tests/test_release_validation.py tests/cli/test_cli.py -q
+uv run pytest tests/test_release_validation.py tests/cli/test_cli.py -q
 ```
 
 Expected:
@@ -2763,9 +2763,9 @@ Create `docs/release-checklist.md`:
 ```markdown
 # Release Checklist
 
-- [ ] `pytest` passes.
-- [ ] `ruff check .` passes.
-- [ ] `python3 -m build --wheel` passes.
+- [ ] `uv run pytest` passes.
+- [ ] `uv run ruff check .` passes.
+- [ ] `uv run python -m build --wheel` passes.
 - [ ] Snapshot validates.
 - [ ] Compressed snapshot is below 100MB.
 - [ ] Snapshot contains no CTS key.
@@ -2781,7 +2781,7 @@ Create `docs/release-checklist.md`:
 Run:
 
 ```bash
-pytest tests/test_release_validation.py tests/cli/test_cli.py -q
+uv run pytest tests/test_release_validation.py tests/cli/test_cli.py -q
 ```
 
 Expected:
@@ -2851,7 +2851,7 @@ def test_runtime_does_not_import_builder_or_cts():
 Run:
 
 ```bash
-pytest
+uv run pytest
 ```
 
 Expected:
@@ -2863,7 +2863,7 @@ Expected:
 Run:
 
 ```bash
-ruff check .
+uv run ruff check .
 ```
 
 Expected:
@@ -2925,9 +2925,9 @@ def main() -> int:
         ]
     )
     checks = [
-        ("pytest", ["pytest"]),
-        ("ruff check .", ["ruff", "check", "."]),
-        ("Wheel build", ["python3", "-m", "build", "--wheel"]),
+        ("pytest", ["uv", "run", "pytest"]),
+        ("ruff check .", ["uv", "run", "ruff", "check", "."]),
+        ("Wheel build", ["uv", "run", "python", "-m", "build", "--wheel"]),
         (
             "Naming scan",
             [
@@ -2958,7 +2958,7 @@ def main() -> int:
                 "",
                 "## Completed",
                 "",
-                "- M0 scaffold status: verified by pytest and package import tests.",
+                "- M0 scaffold status: verified by uv run pytest and package import tests.",
                 "- M1 runtime status: verified by runtime snapshot and query plan tests.",
                 "- M2 builder status: verified by builder fixture tests.",
                 "- M3 graph status: verified by relation and co-occurrence tests.",
@@ -3008,7 +3008,7 @@ Expected:
 Run:
 
 ```bash
-rg -n "status:$|pytest:$|ruff check \\.:$|Naming scan:$|Commit:$" docs/readiness-report.md
+rg -n "status:$|uv run pytest:$|uv run ruff check \\.:$|Naming scan:$|Commit:$" docs/readiness-report.md
 ```
 
 Expected:
@@ -3033,7 +3033,7 @@ Work in /Users/frankqdwang/MLE/seektalent-keyword-graph.
 
 Read AGENTS.md, README.md, GOAL.md, docs/superpowers/specs/2026-05-30-keyword-graph-m0-m7.md, and docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md.
 
-Before running tests, execute Slice S0 including `python3 -m pip install -e ".[dev,builder]"`, then verify `pytest --version`, `ruff --version`, `python3 -m build --version`, and `python3 -c "import pydantic, httpx"`.
+Before running tests, execute Slice S0 including `uv sync --extra dev --extra builder`, then verify `uv run pytest --version`, `uv run ruff --version`, `uv run python -m build --version`, and `uv run python -c "import pydantic, httpx"`.
 
 Execute the plan task-by-task. Continue as long as possible. Commit after each verified slice. Do not call real CTS during unattended execution. Use fake CTS and dry-run gates only. Runtime must never import builder/cts and this package must never import SeekTalent.
 
@@ -3075,7 +3075,7 @@ The plan intentionally spans more than 8 files and more than 2 modules because t
 
 ### Engineering Findings
 
-`[P1] (confidence: 9/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:52` - S0 creates `pyproject.toml` and a `Makefile`, but never installs dev or builder dependencies. Later slices call `pytest` and `ruff`, so a blank Codex Goal can fail before any product work starts. Add an explicit bootstrap step such as `python -m pip install -e '.[dev,builder]'`, then verify `pytest --version`, `ruff --version`, and an import smoke test.
+`[P1] (confidence: 9/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:52` - S0 creates `pyproject.toml` and a `Makefile`, but never installs dev or builder dependencies. Later slices call `pytest` and `ruff`, so a blank Codex Goal can fail before any product work starts. Add an explicit bootstrap step such as `uv sync --extra dev --extra builder`, then verify `uv run pytest --version`, `uv run ruff --version`, and an import smoke test.
 
 `[P1] (confidence: 9/10) docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md:341` - `QueryPlanResponse` uses `list[dict]` and `dict` for core contract fields. That weakens the package boundary SeekTalent will depend on. Add typed Pydantic models for concept rows, query bundles, rejected surfaces, lineage, and warnings, then generate schema and example validation tests from those models.
 
@@ -3134,7 +3134,7 @@ Synthesized from this review's findings. Each task derives from a specific findi
 - [x] **T1 (P1, human: ~20min / CC: ~5min)** - bootstrap - add dependency install and tool smoke checks to S0.
   - Surfaced by: Engineering Findings P1 dependency bootstrap.
   - Files: `docs/superpowers/plans/2026-05-30-keyword-graph-m0-m7.md`.
-  - Verify: the long Goal prompt includes a dependency install command before first `pytest`.
+  - Verify: the long Goal prompt includes `uv sync` before first `uv run pytest`.
 - [x] **T2 (P1, human: ~1h / CC: ~15min)** - contracts - replace loose response dictionaries with typed Pydantic nested models.
   - Surfaced by: Engineering Findings P1 contract looseness.
   - Files: plan S2, contracts examples in S17.
