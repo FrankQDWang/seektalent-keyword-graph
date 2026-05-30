@@ -16,22 +16,33 @@ def build(path: Path) -> None:
           snapshot_schema_version text not null,
           selection_policy_version text not null
         );
+        insert into snapshot_meta values ('kg_fixture', 'snapshot-v1', 'policy-v1');
+
         create table concepts (
           concept_id text primary key,
-          canonical_surface text not null
+          canonical_label text not null,
+          concept_type text not null
         );
+        insert into concepts values ('concept_kubernetes', 'Kubernetes', 'tool');
+
         create table surfaces (
           surface_id text primary key,
+          text_norm text not null,
           display_text text not null,
-          normalized_text text not null,
-          query_safe integer not null,
           latest_cts_total integer,
-          latest_cts_status text not null
+          latest_cts_status text not null,
+          query_safe integer not null
         );
+        insert into surfaces values (
+          'surface_k8s', 'k8s', 'k8s', 58692, 'success', 1
+        );
+
         create table concept_surfaces (
           concept_id text not null,
           surface_id text not null
         );
+        insert into concept_surfaces values ('concept_kubernetes', 'surface_k8s');
+
         create table surface_relations (
           source_surface_id text not null,
           target_surface_id text not null,
@@ -52,10 +63,6 @@ def build(path: Path) -> None:
         create table selection_policy_meta (
           selection_policy_version text not null
         );
-        insert into snapshot_meta values ('kg_fixture', 'snapshot-v1', 'policy-v1');
-        insert into concepts values ('concept_k8s', 'Kubernetes');
-        insert into surfaces values ('surface_k8s', 'k8s', 'k8s', 1, 58692, 'success');
-        insert into concept_surfaces values ('concept_k8s', 'surface_k8s');
         insert into selection_policy_meta values ('policy-v1');
         """
     )
