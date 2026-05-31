@@ -1,0 +1,429 @@
+{
+  "$defs": {
+    "ConceptSheetRow": {
+      "additionalProperties": false,
+      "description": "Resolved concept summary used by downstream consumers for explainability.",
+      "properties": {
+        "canonical_label": {
+          "minLength": 1,
+          "title": "Canonical Label",
+          "type": "string"
+        },
+        "concept_id": {
+          "minLength": 1,
+          "title": "Concept Id",
+          "type": "string"
+        },
+        "concept_type": {
+          "enum": [
+            "skill",
+            "platform",
+            "language",
+            "framework",
+            "tool",
+            "domain",
+            "certificate",
+            "method",
+            "job_keyword",
+            "qualification",
+            "unknown"
+          ],
+          "title": "Concept Type",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "matched_terms": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Matched Terms",
+          "type": "array"
+        },
+        "recall_bucket": {
+          "enum": [
+            "healthy",
+            "too_wide",
+            "too_narrow",
+            "zero",
+            "stale",
+            "unknown"
+          ],
+          "title": "Recall Bucket",
+          "type": "string"
+        },
+        "requirement_strength": {
+          "enum": [
+            "required",
+            "preferred",
+            "nice_to_have"
+          ],
+          "title": "Requirement Strength",
+          "type": "string"
+        },
+        "selected_surfaces": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Selected Surfaces",
+          "type": "array"
+        }
+      },
+      "required": [
+        "concept_id",
+        "canonical_label",
+        "concept_type",
+        "requirement_strength",
+        "matched_terms",
+        "selected_surfaces",
+        "recall_bucket",
+        "confidence"
+      ],
+      "title": "ConceptSheetRow",
+      "type": "object"
+    },
+    "QueryBundle": {
+      "additionalProperties": false,
+      "description": "A deterministic group of query recommendations with shared intent.",
+      "properties": {
+        "bundle_type": {
+          "enum": [
+            "anchor",
+            "precision",
+            "alias_probe",
+            "exploration",
+            "fallback"
+          ],
+          "title": "Bundle Type",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "priority": {
+          "minimum": 1,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "queries": {
+          "items": {
+            "$ref": "#/$defs/QueryPlanQuery"
+          },
+          "minItems": 1,
+          "title": "Queries",
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "source_concept_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Concept Ids",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "enum": [
+              "no_match",
+              "stale_observation",
+              "unknown_observation",
+              "fallback",
+              "partial_snapshot"
+            ],
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "bundle_type",
+        "label",
+        "queries",
+        "rationale",
+        "priority",
+        "source_concept_ids"
+      ],
+      "title": "QueryBundle",
+      "type": "object"
+    },
+    "QueryPlanLineage": {
+      "additionalProperties": false,
+      "description": "Stable provenance for deterministic response replay and debugging.",
+      "properties": {
+        "input_hash": {
+          "minLength": 1,
+          "title": "Input Hash",
+          "type": "string"
+        },
+        "selection_policy_version": {
+          "const": "policy-v1",
+          "title": "Selection Policy Version",
+          "type": "string"
+        },
+        "snapshot_schema_version": {
+          "const": "snapshot-v1",
+          "title": "Snapshot Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "input_hash",
+        "snapshot_schema_version",
+        "selection_policy_version",
+        "source_refs"
+      ],
+      "title": "QueryPlanLineage",
+      "type": "object"
+    },
+    "QueryPlanQuery": {
+      "additionalProperties": false,
+      "description": "One executable query surface inside a bundle.",
+      "properties": {
+        "priority": {
+          "minimum": 1,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "query_mode": {
+          "enum": [
+            "keyword",
+            "exact",
+            "phrase",
+            "boolean"
+          ],
+          "title": "Query Mode",
+          "type": "string"
+        },
+        "query_text": {
+          "minLength": 1,
+          "title": "Query Text",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "recall_bucket": {
+          "enum": [
+            "healthy",
+            "too_wide",
+            "too_narrow",
+            "zero",
+            "stale",
+            "unknown"
+          ],
+          "title": "Recall Bucket",
+          "type": "string"
+        },
+        "source_concept_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Concept Ids",
+          "type": "array"
+        },
+        "surfaces": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Surfaces",
+          "type": "array"
+        }
+      },
+      "required": [
+        "query_text",
+        "query_mode",
+        "surfaces",
+        "reason",
+        "priority",
+        "source_concept_ids",
+        "recall_bucket"
+      ],
+      "title": "QueryPlanQuery",
+      "type": "object"
+    },
+    "QueryPlanWarning": {
+      "additionalProperties": false,
+      "description": "Consumer-visible warning emitted by query planning.",
+      "properties": {
+        "code": {
+          "enum": [
+            "no_match",
+            "stale_observation",
+            "unknown_observation",
+            "fallback",
+            "partial_snapshot"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "source_terms": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Terms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "QueryPlanWarning",
+      "type": "object"
+    },
+    "RejectedSurface": {
+      "additionalProperties": false,
+      "description": "A candidate surface that was excluded before query construction.",
+      "properties": {
+        "evidence": {
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "normalized_surface": {
+          "minLength": 1,
+          "title": "Normalized Surface",
+          "type": "string"
+        },
+        "reason_code": {
+          "enum": [
+            "company_like",
+            "department_like",
+            "too_generic",
+            "zero_recall",
+            "too_wide_without_companion",
+            "stale_observation",
+            "low_confidence_alias",
+            "policy_blocked",
+            "no_active_concept"
+          ],
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "requirement",
+            "title",
+            "jd_text",
+            "notes"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "surface_text": {
+          "minLength": 1,
+          "title": "Surface Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface_text",
+        "normalized_surface",
+        "reason_code",
+        "source",
+        "evidence"
+      ],
+      "title": "RejectedSurface",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Keyword graph query planning response.",
+  "properties": {
+    "concept_sheet": {
+      "items": {
+        "$ref": "#/$defs/ConceptSheetRow"
+      },
+      "title": "Concept Sheet",
+      "type": "array"
+    },
+    "kg_snapshot_id": {
+      "minLength": 1,
+      "title": "Kg Snapshot Id",
+      "type": "string"
+    },
+    "lineage": {
+      "$ref": "#/$defs/QueryPlanLineage"
+    },
+    "query_bundles": {
+      "items": {
+        "$ref": "#/$defs/QueryBundle"
+      },
+      "title": "Query Bundles",
+      "type": "array"
+    },
+    "rejected_surfaces": {
+      "items": {
+        "$ref": "#/$defs/RejectedSurface"
+      },
+      "title": "Rejected Surfaces",
+      "type": "array"
+    },
+    "request_id": {
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "query-plan-response-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection_policy_version": {
+      "const": "policy-v1",
+      "title": "Selection Policy Version",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "$ref": "#/$defs/QueryPlanWarning"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "kg_snapshot_id",
+    "selection_policy_version",
+    "concept_sheet",
+    "query_bundles",
+    "rejected_surfaces",
+    "warnings",
+    "lineage"
+  ],
+  "title": "QueryPlanResponse",
+  "type": "object"
+}

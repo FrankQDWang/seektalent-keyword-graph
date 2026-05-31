@@ -1,0 +1,218 @@
+{
+  "schema_version": "query-plan-response-v1",
+  "request_id": "req-2026-05-31-demo",
+  "kg_snapshot_id": "kg-snapshot-2026-05-31",
+  "selection_policy_version": "policy-v1",
+  "concept_sheet": [
+    {
+      "concept_id": "concept-kubernetes",
+      "canonical_label": "Kubernetes",
+      "concept_type": "platform",
+      "requirement_strength": "required",
+      "matched_terms": [
+        "Kubernetes",
+        "k8s"
+      ],
+      "selected_surfaces": [
+        "Kubernetes",
+        "k8s"
+      ],
+      "recall_bucket": "healthy",
+      "confidence": 0.98
+    },
+    {
+      "concept_id": "concept-go",
+      "canonical_label": "Go",
+      "concept_type": "language",
+      "requirement_strength": "required",
+      "matched_terms": [
+        "Go"
+      ],
+      "selected_surfaces": [
+        "Go",
+        "Golang"
+      ],
+      "recall_bucket": "too_wide",
+      "confidence": 0.91
+    },
+    {
+      "concept_id": "concept-distributed-systems",
+      "canonical_label": "Distributed Systems",
+      "concept_type": "domain",
+      "requirement_strength": "nice_to_have",
+      "matched_terms": [
+        "distributed systems"
+      ],
+      "selected_surfaces": [
+        "distributed systems"
+      ],
+      "recall_bucket": "unknown",
+      "confidence": 0.64
+    }
+  ],
+  "query_bundles": [
+    {
+      "bundle_type": "anchor",
+      "label": "Kubernetes anchor",
+      "queries": [
+        {
+          "query_text": "\"Kubernetes\"",
+          "query_mode": "exact",
+          "surfaces": [
+            "Kubernetes"
+          ],
+          "reason": "Required concept with healthy observed recall.",
+          "priority": 1,
+          "source_concept_ids": [
+            "concept-kubernetes"
+          ],
+          "recall_bucket": "healthy"
+        }
+      ],
+      "rationale": "Use the strongest required graph-backed concept first.",
+      "priority": 1,
+      "source_concept_ids": [
+        "concept-kubernetes"
+      ],
+      "warnings": []
+    },
+    {
+      "bundle_type": "precision",
+      "label": "Go with Kubernetes companion",
+      "queries": [
+        {
+          "query_text": "\"Go\" AND \"Kubernetes\"",
+          "query_mode": "boolean",
+          "surfaces": [
+            "Go",
+            "Kubernetes"
+          ],
+          "reason": "Go is too wide alone and needs a required companion.",
+          "priority": 2,
+          "source_concept_ids": [
+            "concept-go",
+            "concept-kubernetes"
+          ],
+          "recall_bucket": "too_wide"
+        }
+      ],
+      "rationale": "Pair broad language terms with a strong platform concept.",
+      "priority": 2,
+      "source_concept_ids": [
+        "concept-go",
+        "concept-kubernetes"
+      ],
+      "warnings": []
+    },
+    {
+      "bundle_type": "alias_probe",
+      "label": "Kubernetes alias probe",
+      "queries": [
+        {
+          "query_text": "\"k8s\"",
+          "query_mode": "exact",
+          "surfaces": [
+            "k8s"
+          ],
+          "reason": "High-confidence alias for the Kubernetes concept.",
+          "priority": 3,
+          "source_concept_ids": [
+            "concept-kubernetes"
+          ],
+          "recall_bucket": "too_narrow"
+        }
+      ],
+      "rationale": "Probe an alias that may find candidates missed by canonical text.",
+      "priority": 3,
+      "source_concept_ids": [
+        "concept-kubernetes"
+      ],
+      "warnings": []
+    },
+    {
+      "bundle_type": "exploration",
+      "label": "Distributed systems exploration",
+      "queries": [
+        {
+          "query_text": "\"distributed systems\"",
+          "query_mode": "phrase",
+          "surfaces": [
+            "distributed systems"
+          ],
+          "reason": "Safe emerging surface with insufficient recall confidence.",
+          "priority": 4,
+          "source_concept_ids": [
+            "concept-distributed-systems"
+          ],
+          "recall_bucket": "unknown"
+        }
+      ],
+      "rationale": "Keep low-confidence graph evidence separate from core bundles.",
+      "priority": 4,
+      "source_concept_ids": [
+        "concept-distributed-systems"
+      ],
+      "warnings": [
+        "unknown_observation"
+      ]
+    },
+    {
+      "bundle_type": "fallback",
+      "label": "Title fallback",
+      "queries": [
+        {
+          "query_text": "\"Senior Platform Engineer\"",
+          "query_mode": "phrase",
+          "surfaces": [
+            "Senior Platform Engineer"
+          ],
+          "reason": "Fallback text retained for uncovered request context.",
+          "priority": 5,
+          "source_concept_ids": [],
+          "recall_bucket": "unknown"
+        }
+      ],
+      "rationale": "Use only when graph-backed routes are unavailable or unsafe.",
+      "priority": 5,
+      "source_concept_ids": [],
+      "warnings": [
+        "fallback"
+      ]
+    }
+  ],
+  "rejected_surfaces": [
+    {
+      "surface_text": "Acme Cloud",
+      "normalized_surface": "acme cloud",
+      "reason_code": "company_like",
+      "source": "jd_text",
+      "evidence": "Experience with Acme Cloud platform."
+    }
+  ],
+  "warnings": [
+    {
+      "code": "unknown_observation",
+      "message": "Distributed systems has graph evidence but no fresh CTS observation.",
+      "source_terms": [
+        "distributed systems"
+      ]
+    },
+    {
+      "code": "fallback",
+      "message": "Fallback bundle included for uncovered request context.",
+      "source_terms": [
+        "Senior Platform Engineer"
+      ]
+    }
+  ],
+  "lineage": {
+    "input_hash": "sha256:12f8f67a7b7da7bc77d5",
+    "snapshot_schema_version": "snapshot-v1",
+    "selection_policy_version": "policy-v1",
+    "source_refs": [
+      "request:req-2026-05-31-demo",
+      "snapshot:kg-snapshot-2026-05-31",
+      "policy:policy-v1"
+    ]
+  }
+}
