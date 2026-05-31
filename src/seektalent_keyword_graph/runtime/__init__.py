@@ -1,7 +1,5 @@
-"""Public package metadata and runtime facade export."""
+"""Runtime snapshot access and typed errors."""
 
-from seektalent_keyword_graph.contracts import QueryPlanRequest, QueryPlanResponse
-from seektalent_keyword_graph.engine import KeywordGraph
 from seektalent_keyword_graph.runtime.errors import (
     KeywordGraphRuntimeError,
     SnapshotChecksumError,
@@ -11,19 +9,15 @@ from seektalent_keyword_graph.runtime.errors import (
     SnapshotSchemaError,
     UnsupportedSnapshotVersionError,
 )
-
-__version__ = "0.1.0"
+from seektalent_keyword_graph.runtime.snapshot_store import SQLiteSnapshotStore
 
 __all__ = [
-    "KeywordGraph",
     "KeywordGraphRuntimeError",
-    "QueryPlanRequest",
-    "QueryPlanResponse",
+    "SQLiteSnapshotStore",
     "SnapshotChecksumError",
     "SnapshotError",
     "SnapshotFormatError",
     "SnapshotPrivacyError",
     "SnapshotSchemaError",
     "UnsupportedSnapshotVersionError",
-    "__version__",
 ]
