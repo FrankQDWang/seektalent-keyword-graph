@@ -18,6 +18,57 @@ def run_json(args: list[str], capsys) -> dict[str, object]:
     return json.loads(captured.out)
 
 
+def seed_cli_build_db(tmp_path: Path, capsys) -> Path:
+    build_db = tmp_path / "build.sqlite3"
+    out_dir = tmp_path / "seed-out"
+
+    run_json(
+        [
+            "import-jds",
+            str(JD_FIXTURE),
+            "--build-db",
+            str(build_db),
+            "--corpus-version",
+            "fixture-v1",
+        ],
+        capsys,
+    )
+    run_json(
+        [
+            "extract-surfaces",
+            "--build-db",
+            str(build_db),
+            "--report",
+            str(out_dir / "extraction-report.json"),
+        ],
+        capsys,
+    )
+    run_json(
+        [
+            "build-relations",
+            "--build-db",
+            str(build_db),
+            "--sampling-csv",
+            str(out_dir / "sampling.csv"),
+            "--sampling-jsonl",
+            str(out_dir / "sampling.jsonl"),
+        ],
+        capsys,
+    )
+    run_json(
+        [
+            "probe-cts",
+            "--build-db",
+            str(build_db),
+            "--fake-response",
+            str(CTS_FIXTURE),
+            "--dry-run",
+        ],
+        capsys,
+    )
+    return build_db
+
+
 def test_cli_contract_minimal_commands_build_and_validate_snapshot(
     tmp_path: Path, capsys
 ) -> None:
@@ -108,6 +159,63 @@ def test_cli_contract_minimal_commands_build_and_validate_snapshot(
         capsys,
     )
     assert validation_payload["ok"] is True
+
+
+def test_build_snapshot_partial_aliases_return_stable_valid_artifacts(
+    tmp_path: Path, capsys
+) -> None:
+    build_db = seed_cli_build_db(tmp_path, capsys)
+
+    commands = [
+        [
+            "build-snapshot",
+            "--build-db",
+            str(build_db),
+            "--snapshot",
+            str(tmp_path / "snapshot-only" / "kg.sqlite3"),
+        ],
+        [
+            "build-snapshot",
+            "--build-db",
+            str(build_db),
+            "--output-dir",
+            str(tmp_path / "output-dir-plus-snapshot"),
+            "--snapshot",
+            str(tmp_path / "output-dir-plus-snapshot" / "kg.sqlite3"),
+        ],
+    ]
+    for command in commands:
+        snapshot_payload = run_json(command, capsys)
+        paths = {
+            name: Path(path)
+            for name, path in snapshot_payload["paths"].items()
+        }
+        for path in paths.values():
+            assert path.is_file()
+            assert "keyword-graph-snapshot-" not in str(path)
+            assert path.is_relative_to(tmp_path)
+
+        manifest_payload = json.loads(
+            paths["manifest"].read_text(encoding="utf-8")
+        )
+        assert manifest_payload["artifacts"]["sqlite"] == paths["snapshot"].name
+        assert (
+            manifest_payload["artifacts"]["sqlite_gzip"]
+            == paths["compressed_snapshot"].name
+        )
+        validation_payload = run_json(
+            [
+                "validate-snapshot",
+                "--snapshot",
+                str(paths["snapshot"]),
+                "--manifest",
+                str(paths["manifest"]),
+                "--compressed-snapshot",
+                str(paths["compressed_snapshot"]),
+            ],
+            capsys,
+        )
+        assert validation_payload["ok"] is True
 
 
 def test_cli_end_to_end_builds_and_validates_snapshot(tmp_path: Path, capsys) -> None:

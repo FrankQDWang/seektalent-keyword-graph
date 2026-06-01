@@ -461,20 +461,24 @@ def _finalize_snapshot_artifacts(
     )
 
     source_snapshot = Path(result.snapshot_path)
-    snapshot_path = Path(args.snapshot) if args.snapshot else source_snapshot
+    output_dir = _aliased_snapshot_output_dir(args)
+    snapshot_path = (
+        Path(args.snapshot) if args.snapshot else output_dir / "keyword-graph.sqlite3"
+    )
     compressed_path = (
         Path(args.compressed_snapshot)
         if args.compressed_snapshot
         else Path(f"{snapshot_path}.gz")
     )
-    manifest_path = Path(args.manifest) if args.manifest else Path(result.manifest_path)
+    manifest_path = (
+        Path(args.manifest) if args.manifest else output_dir / "snapshot-manifest.json"
+    )
     build_report_path = Path(args.build_report) if args.build_report else Path(
-        manifest_path.parent / "build-report.json"
+        output_dir / "build-report.json"
     )
 
-    if snapshot_path.resolve() != source_snapshot.resolve():
-        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_snapshot, snapshot_path)
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_snapshot, snapshot_path)
     build_report_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(Path(result.build_report_path), build_report_path)
 
@@ -514,6 +518,20 @@ def _finalize_snapshot_artifacts(
         "compressed_snapshot": str(compressed_path),
         "build_report": str(build_report_path),
     }
+
+
+def _aliased_snapshot_output_dir(args: argparse.Namespace) -> Path:
+    if args.output_dir:
+        return Path(args.output_dir)
+    for alias in (
+        args.snapshot,
+        args.manifest,
+        args.compressed_snapshot,
+        args.build_report,
+    ):
+        if alias:
+            return Path(alias).parent
+    raise ValueError("snapshot aliases require at least one artifact path")
 
 
 def _snapshot_output_dir(args: argparse.Namespace) -> Path:
