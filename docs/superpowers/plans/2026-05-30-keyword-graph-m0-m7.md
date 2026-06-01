@@ -2875,7 +2875,7 @@ Expected:
 Run:
 
 ```bash
-rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_intelligence" \
+rg -n "seektalent-keyword-&#8203;intel|seektalent_keyword_&#8203;intel|KEYWORD_&#8203;INTEL|keyword_&#8203;intelligence" \
   README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts
 ```
 

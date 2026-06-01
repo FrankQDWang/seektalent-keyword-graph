@@ -1358,7 +1358,7 @@ uv run pytest
 uv run ruff check .
 uv run python -m build --wheel
 uv run pytest tests/architecture/test_import_boundaries.py -q
-rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_intelligence" \
+rg -n "seektalent-keyword-&#8203;intel|seektalent_keyword_&#8203;intel|KEYWORD_&#8203;INTEL|keyword_&#8203;intelligence" \
   README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs
 uv run pytest tests/integration/test_cli_end_to_end.py -q
 uv run pytest tests/integration/test_jd_to_query_plan.py -q
@@ -1393,7 +1393,7 @@ uv run pytest
 uv run ruff check .
 uv run python -m build --wheel
 uv run pytest tests/architecture/test_import_boundaries.py -q
-rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_intelligence" \
+rg -n "seektalent-keyword-&#8203;intel|seektalent_keyword_&#8203;intel|KEYWORD_&#8203;INTEL|keyword_&#8203;intelligence" \
   README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs
 uv run pytest tests/integration/test_cli_end_to_end.py -q
 uv run pytest tests/integration/test_jd_to_query_plan.py -q
