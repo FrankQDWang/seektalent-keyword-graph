@@ -5,11 +5,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+from _fixture_flow_loader import load_run_fixture_flow
+
 from seektalent_keyword_graph.builder.build_snapshot import (
     BuildSnapshotConfig,
     build_runtime_snapshot,
 )
 from seektalent_keyword_graph.builder.build_store import BuildStore
+
+run_fixture_flow = load_run_fixture_flow()
 
 NOW = "2026-06-01T00:00:00Z"
 
@@ -55,6 +59,62 @@ def test_build_db_snapshot_to_query_recall_optimization_is_local_only(
         ["LLMOps", "LLMOps", "score_only"],
         ["GraphQL", "GraphQL", "fallback"],
     ]
+
+
+def test_fixture_flow_query_recall_covers_provider_and_observation_edges(
+    tmp_path: Path,
+) -> None:
+    result = run_fixture_flow(tmp_path)
+    responses = {
+        response.request_id: response
+        for response in result.query_recall_responses
+    }
+
+    cts = responses["recall-cts-term-pool"]
+    assert [term.action for term in cts.optimized_terms] == [
+        "replace",
+        "keep",
+        "add_precision_companion",
+        "replace",
+        "score_only",
+        "fallback",
+    ]
+    assert {warning.code for warning in cts.warnings} == {
+        "fallback",
+        "no_match",
+        "stale_observation",
+        "too_wide_recall",
+        "unknown_observation",
+        "zero_recall",
+    }
+
+    liepin = responses["recall-liepin-provider"]
+    assert [
+        (item.source_query_text, item.action) for item in liepin.optimized_terms
+    ] == [
+        ("Python 3", "score_only"),
+        ("React", "keep"),
+        ("LLMOps", "keep"),
+    ]
+    assert {warning.code for warning in liepin.warnings} == {"too_narrow_recall"}
+
+    boss = responses["recall-boss-provider"]
+    assert [
+        (item.source_query_text, item.query_text, item.action)
+        for item in boss.optimized_terms
+    ] == [
+        ("Python 3", "Python 3", "keep"),
+        ("Kubernetes", "Kubernetes", "keep"),
+        ("Kubernetes", "Docker", "add_precision_companion"),
+        ("React", "React.js", "replace"),
+    ]
+
+    phrase = responses["recall-phrase-without-observation"]
+    assert [warning.code for warning in phrase.warnings] == [
+        "unknown_observation",
+        "matched_without_observation",
+    ]
+    assert phrase.input_observations == []
 
 
 _RUNTIME_CHECK = r"""
