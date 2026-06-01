@@ -300,7 +300,8 @@ def test_query_plan_examples_validate_through_pydantic() -> None:
     parsed_response = QueryPlanResponse.model_validate(response)
 
     bundle_types = {bundle.bundle_type for bundle in parsed_response.query_bundles}
-    assert bundle_types == set(BUNDLE_TYPES)
+    assert bundle_types == {"anchor", "precision", "alias_probe", "exploration"}
+    assert parsed_response.kg_snapshot_id == "kg-eval-fixture"
     assert any(
         surface.reason_code == "company_like"
         for surface in parsed_response.rejected_surfaces
