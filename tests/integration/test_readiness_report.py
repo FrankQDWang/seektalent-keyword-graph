@@ -13,25 +13,26 @@ def test_readiness_report_renders_required_evidence_with_injected_runner(
     tmp_path: Path,
 ) -> None:
     module = _load_writer()
-    calls: list[str] = []
-    work_dir = tmp_path / "readiness-fixture-flow"
+    calls: list[tuple[str, ...]] = []
+    work_dir = tmp_path / "readiness fixture ; safe $(not-run)"
     snapshot = work_dir / "snapshot" / "kg.sqlite3"
     manifest = work_dir / "snapshot" / "kg.manifest.json"
     compressed = Path(f"{snapshot}.gz")
 
-    def fake_runner(command: str, cwd: Path) -> object:
+    def fake_runner(command: object, cwd: Path) -> object:
         assert cwd == PROJECT_ROOT
-        calls.append(command)
-        if command == module.OLD_NAME_SCAN_COMMAND:
+        calls.append(command.argv)
+        if command == module.OLD_NAME_SCAN_SPEC:
             return module.CommandResult(
-                command=command,
+                command=command.display,
                 exit_code=1,
                 stdout="",
                 stderr="",
             )
         if command == module.fixture_flow_command(work_dir):
+            assert command.argv[-2:] == ("--work-dir", str(work_dir))
             return module.CommandResult(
-                command=command,
+                command=command.display,
                 exit_code=0,
                 stdout=(
                     "{\n"
@@ -43,16 +44,24 @@ def test_readiness_report_renders_required_evidence_with_injected_runner(
                 stderr="",
             )
         if command == module.validation_command(snapshot, manifest, compressed):
+            assert command.argv[-6:] == (
+                "--snapshot",
+                str(snapshot),
+                "--manifest",
+                str(manifest),
+                "--compressed-snapshot",
+                str(compressed),
+            )
             return module.CommandResult(
-                command=command,
+                command=command.display,
                 exit_code=0,
                 stdout="snapshot validation passed\n",
                 stderr="",
             )
         return module.CommandResult(
-            command=command,
+            command=command.display,
             exit_code=0,
-            stdout=f"{command} completed\n",
+            stdout=f"{command.display} completed\n",
             stderr="",
         )
 
@@ -68,15 +77,21 @@ def test_readiness_report_renders_required_evidence_with_injected_runner(
     assert report.ok
     assert output.read_text(encoding="utf-8") == report.markdown
     assert calls == [
-        *module.FINAL_VERIFICATION_COMMANDS,
-        module.fixture_flow_command(work_dir),
-        module.validation_command(snapshot, manifest, compressed),
+        *(command.argv for command in module.FINAL_VERIFICATION_COMMANDS),
+        module.fixture_flow_command(work_dir).argv,
+        module.validation_command(snapshot, manifest, compressed).argv,
     ]
-    assert "HEAD: `abc123head`" in report.markdown
+    assert "Verified implementation HEAD: `abc123head`" in report.markdown
+    assert "later report-refresh commit may store this generated report" in (
+        report.markdown
+    )
     rendered_old_name_scan = module.render_command_for_report(
         module.OLD_NAME_SCAN_COMMAND
     )
     assert f"- Command: `{rendered_old_name_scan}`" in report.markdown
+    assert "&#8203;" not in report.markdown
+    for old_name in module.OLD_NAME_PATTERNS:
+        assert old_name not in report.markdown
     assert "  Exit code: 1" in report.markdown
     assert "  Status: success/no matches" in report.markdown
     assert "  First meaningful output line: (no output)" in report.markdown
@@ -100,6 +115,34 @@ def test_readiness_report_renders_required_evidence_with_injected_runner(
     assert "- None." in report.markdown
     blank_status_pattern = r"status:$|pytest:$|ruff check \.:$|Commit:$"
     assert not re.search(blank_status_pattern, report.markdown, re.MULTILINE)
+
+
+def test_run_command_executes_argv_without_shell(monkeypatch: object) -> None:
+    module = _load_writer()
+    captured: dict[str, object] = {}
+    command = module.CommandSpec(
+        argv=("python", "-c", "print('path ; still argv')"),
+        display="python -c \"print('path ; still argv')\"",
+    )
+
+    class Completed:
+        returncode = 0
+        stdout = "ok\n"
+        stderr = ""
+
+    def fake_run(argv: object, **kwargs: object) -> Completed:
+        captured["argv"] = argv
+        captured["kwargs"] = kwargs
+        return Completed()
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    result = module.run_command(command, PROJECT_ROOT)
+
+    assert captured["argv"] == list(command.argv)
+    assert captured["kwargs"]["shell"] is False
+    assert result.command == command.display
+    assert result.exit_code == 0
 
 
 def _load_writer() -> object:

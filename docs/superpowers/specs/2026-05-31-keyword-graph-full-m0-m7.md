@@ -638,12 +638,14 @@ uv run pytest
 uv run ruff check .
 uv run python -m build --wheel
 uv run pytest tests/architecture/test_import_boundaries.py -q
-rg -n "seektalent-keyword-&#8203;intel|seektalent_keyword_&#8203;intel|KEYWORD_&#8203;INTEL|keyword_&#8203;intelligence" \
-  README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs
+uv run python -c 'import subprocess; from scripts.write_readiness_report import OLD_NAME_SCAN_SPEC; raise SystemExit(subprocess.run(list(OLD_NAME_SCAN_SPEC.argv)).returncode)'
 uv run pytest tests/integration/test_cli_end_to_end.py -q
 uv run pytest tests/integration/test_query_recall_optimization.py -q
 keyword-graph validate-snapshot --snapshot <fixture-built-snapshot> --manifest <fixture-manifest>
 ```
 
-The old-name `rg` command must exit 1 with no matches. Every other command must
-exit 0. `docs/readiness-report.md` must be regenerated after these commands.
+The old-name scan delegates to `OLD_NAME_SCAN_SPEC.argv`, whose display string
+is the exact `OLD_NAME_SCAN_COMMAND` constant in
+`scripts/write_readiness_report.py`; it must exit 1 with no matches. Every
+other command must exit 0. `docs/readiness-report.md` must be regenerated after
+these commands.

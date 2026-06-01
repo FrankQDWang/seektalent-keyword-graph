@@ -1,6 +1,7 @@
 # Readiness Report
 
-HEAD: `bc66b8f7e5c794db727682b4ae9b12faba864000`
+Verified implementation HEAD: `f305b0b682572e0f22cdb00b53980fed1e17c535`
+Note: A later report-refresh commit may store this generated report; the verified implementation HEAD above is the code revision checked.
 Overall status: complete
 
 ## Verification Commands
@@ -10,19 +11,19 @@ Overall status: complete
 - `uv run ruff check .`
 - `uv run python -m build --wheel`
 - `uv run pytest tests/architecture/test_import_boundaries.py -q`
-- `rg -n "seektalent-k&#8203;eyword-intel|seektalent_k&#8203;eyword_intel|KEYWOR&#8203;D_INTEL|keyword_in&#8203;telligence" README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs`
+- `rg -n "<legacy-name denylist pattern from scripts/write_readiness_report.py>" README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs`
 - `uv run pytest tests/integration/test_cli_end_to_end.py -q`
 - `uv run pytest tests/integration/test_jd_to_query_plan.py -q`
 - `uv run pytest tests/integration/test_query_recall_optimization.py -q`
-- `uv run python scripts/run_fixture_flow.py --work-dir /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow`
-- `uv run keyword-graph validate-snapshot --snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3 --manifest /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json --compressed-snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz`
+- `uv run python scripts/run_fixture_flow.py --work-dir '/private/tmp/readiness fixture ; safe'`
+- `uv run keyword-graph validate-snapshot --snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3' --manifest '/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json' --compressed-snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz'`
 
 ## Final Verification Evidence
 
 - Command: `uv sync --extra dev --extra builder`
   Exit code: 0
   Status: success
-  First meaningful output line: Resolved 24 packages in 3ms
+  First meaningful output line: Resolved 24 packages in 5ms
 - Command: `uv run pytest`
   Exit code: 0
   Status: success
@@ -39,7 +40,7 @@ Overall status: complete
   Exit code: 0
   Status: success
   First meaningful output line: ........                                                                 [100%]
-- Command: `rg -n "seektalent-k&#8203;eyword-intel|seektalent_k&#8203;eyword_intel|KEYWOR&#8203;D_INTEL|keyword_in&#8203;telligence" README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs`
+- Command: `rg -n "<legacy-name denylist pattern from scripts/write_readiness_report.py>" README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs`
   Exit code: 1
   Status: success/no matches
   First meaningful output line: (no output)
@@ -55,14 +56,14 @@ Overall status: complete
   Exit code: 0
   Status: success
   First meaningful output line: ..                                                                       [100%]
-- Command: `uv run python scripts/run_fixture_flow.py --work-dir /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow`
+- Command: `uv run python scripts/run_fixture_flow.py --work-dir '/private/tmp/readiness fixture ; safe'`
   Exit code: 0
   Status: success
-  First meaningful output line: "build_db_path": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/build.sqlite3",
-- Command: `uv run keyword-graph validate-snapshot --snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3 --manifest /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json --compressed-snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz`
+  First meaningful output line: "build_db_path": "/private/tmp/readiness fixture ; safe/build.sqlite3",
+- Command: `uv run keyword-graph validate-snapshot --snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3' --manifest '/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json' --compressed-snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz'`
   Exit code: 0
   Status: success
-  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "25c68df339cfff45ef57f29440e84898f7042f33c3917ac0b9f6e3801df56ce6", "manifest": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "d4a61ab3ba021648c3c005337d6914d11170795fea6ed5a91012ce8bbb8a9bfc", "status": "ok"}
+  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "7a61d631dc68975741db677837194a2eb2358a0052826623acf7e75b74297dad", "manifest": "/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "b7db4d14e82e722858b7ba363ffb42daec634493cf047741f175842fd2974fc8", "status": "ok"}
 
 ## Query Recall Optimization Status
 
@@ -168,7 +169,7 @@ Evidence: fixture snapshot build, manifest, checksum, gzip artifact, `provider_r
 | CLI fixture flow runs end-to-end. | `uv run pytest tests/integration/test_cli_end_to_end.py -q` | complete |
 | Import-boundary tests cover runtime, domain, builder, CTS, and SeekTalent. | `uv run pytest tests/architecture/test_import_boundaries.py -q` | complete |
 | Release checklist, rollback instructions, and readiness report exist. | `uv run pytest` and generated `docs/readiness-report.md` | complete |
-| `docs/readiness-report.md` maps every M0-M7 acceptance item to fresh test or command evidence, separately lists Query Recall Optimization status, lists incomplete items explicitly, and includes current HEAD. | `uv run pytest tests/integration/test_readiness_report.py -q` | complete |
+| `docs/readiness-report.md` maps every M0-M7 acceptance item to fresh test or command evidence, separately lists Query Recall Optimization status, lists incomplete items explicitly, and includes the verified implementation HEAD. | `uv run pytest tests/integration/test_readiness_report.py -q` | complete |
 
 ## Incomplete Items
 

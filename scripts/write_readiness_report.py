@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -20,20 +21,76 @@ OLD_NAME_PATTERNS = [
     "KEYWORD_" + "INTEL",
     "keyword_" + "intelligence",
 ]
+OLD_NAME_SCAN_TARGETS = (
+    "README.md",
+    "GOAL.md",
+    "AGENTS.md",
+    "pyproject.toml",
+    "src",
+    "tests",
+    "contracts",
+    "scripts",
+    "docs",
+)
+OLD_NAME_SCAN_PATTERN = "|".join(OLD_NAME_PATTERNS)
 OLD_NAME_SCAN_COMMAND = (
-    f'rg -n "{"|".join(OLD_NAME_PATTERNS)}" README.md GOAL.md AGENTS.md '
-    "pyproject.toml src tests contracts scripts docs"
+    f'rg -n "{OLD_NAME_SCAN_PATTERN}" {" ".join(OLD_NAME_SCAN_TARGETS)}'
+)
+OLD_NAME_SCAN_REPORT_COMMAND = (
+    'rg -n "<legacy-name denylist pattern from scripts/write_readiness_report.py>" '
+    f"{' '.join(OLD_NAME_SCAN_TARGETS)}"
+)
+
+
+@dataclass(frozen=True)
+class CommandSpec:
+    argv: tuple[str, ...]
+    display: str
+    report_display: str | None = None
+
+
+def command_spec(
+    *argv: str,
+    display: str | None = None,
+    report_display: str | None = None,
+) -> CommandSpec:
+    return CommandSpec(
+        argv=tuple(argv),
+        display=display or shlex.join(argv),
+        report_display=report_display,
+    )
+
+
+OLD_NAME_SCAN_SPEC = command_spec(
+    "rg",
+    "-n",
+    OLD_NAME_SCAN_PATTERN,
+    *OLD_NAME_SCAN_TARGETS,
+    display=OLD_NAME_SCAN_COMMAND,
+    report_display=OLD_NAME_SCAN_REPORT_COMMAND,
 )
 FINAL_VERIFICATION_COMMANDS = [
-    "uv sync --extra dev --extra builder",
-    "uv run pytest",
-    "uv run ruff check .",
-    "uv run python -m build --wheel",
-    "uv run pytest tests/architecture/test_import_boundaries.py -q",
-    OLD_NAME_SCAN_COMMAND,
-    "uv run pytest tests/integration/test_cli_end_to_end.py -q",
-    "uv run pytest tests/integration/test_jd_to_query_plan.py -q",
-    "uv run pytest tests/integration/test_query_recall_optimization.py -q",
+    command_spec("uv", "sync", "--extra", "dev", "--extra", "builder"),
+    command_spec("uv", "run", "pytest"),
+    command_spec("uv", "run", "ruff", "check", "."),
+    command_spec("uv", "run", "python", "-m", "build", "--wheel"),
+    command_spec(
+        "uv", "run", "pytest", "tests/architecture/test_import_boundaries.py", "-q"
+    ),
+    OLD_NAME_SCAN_SPEC,
+    command_spec(
+        "uv", "run", "pytest", "tests/integration/test_cli_end_to_end.py", "-q"
+    ),
+    command_spec(
+        "uv", "run", "pytest", "tests/integration/test_jd_to_query_plan.py", "-q"
+    ),
+    command_spec(
+        "uv",
+        "run",
+        "pytest",
+        "tests/integration/test_query_recall_optimization.py",
+        "-q",
+    ),
 ]
 
 
@@ -61,7 +118,7 @@ class ReportResult:
     incomplete_items: list[str]
 
 
-CommandRunner = Callable[[str, Path], CommandResult]
+CommandRunner = Callable[[CommandSpec, Path], CommandResult]
 HeadProvider = Callable[[], str]
 
 
@@ -336,25 +393,39 @@ ACCEPTANCE_EVIDENCE: dict[str, list[AcceptanceItem]] = {
         AcceptanceItem(
             "`docs/readiness-report.md` maps every M0-M7 acceptance item to fresh "
             "test or command evidence, separately lists Query Recall Optimization "
-            "status, lists incomplete items explicitly, and includes current HEAD.",
+            "status, lists incomplete items explicitly, and includes the verified "
+            "implementation HEAD.",
             "`uv run pytest tests/integration/test_readiness_report.py -q`",
         ),
     ],
 }
 
 
-def fixture_flow_command(work_dir: Path) -> str:
-    return f"uv run python scripts/run_fixture_flow.py --work-dir {work_dir}"
+def fixture_flow_command(work_dir: Path) -> CommandSpec:
+    return command_spec(
+        "uv",
+        "run",
+        "python",
+        "scripts/run_fixture_flow.py",
+        "--work-dir",
+        str(work_dir),
+    )
 
 
 def validation_command(
     snapshot_path: Path, manifest_path: Path, compressed_snapshot_path: Path
-) -> str:
-    return (
-        "uv run keyword-graph validate-snapshot "
-        f"--snapshot {snapshot_path} "
-        f"--manifest {manifest_path} "
-        f"--compressed-snapshot {compressed_snapshot_path}"
+) -> CommandSpec:
+    return command_spec(
+        "uv",
+        "run",
+        "keyword-graph",
+        "validate-snapshot",
+        "--snapshot",
+        str(snapshot_path),
+        "--manifest",
+        str(manifest_path),
+        "--compressed-snapshot",
+        str(compressed_snapshot_path),
     )
 
 
@@ -427,17 +498,17 @@ def generate_report(
     )
 
 
-def run_command(command: str, cwd: Path) -> CommandResult:
+def run_command(command: CommandSpec, cwd: Path) -> CommandResult:
     completed = subprocess.run(
-        command,
+        list(command.argv),
         cwd=cwd,
-        shell=True,
+        shell=False,
         check=False,
         capture_output=True,
         text=True,
     )
     return CommandResult(
-        command=command,
+        command=command.display,
         exit_code=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
@@ -464,7 +535,9 @@ def render_report(
     lines = [
         "# Readiness Report",
         "",
-        f"HEAD: `{head}`",
+        f"Verified implementation HEAD: `{head}`",
+        "Note: A later report-refresh commit may store this generated report; "
+        "the verified implementation HEAD above is the code revision checked.",
         f"Overall status: {_overall_status(incomplete_items)}",
         "",
         "## Verification Commands",
@@ -547,16 +620,12 @@ def _command_block(result: CommandResult) -> list[str]:
     ]
 
 
-def render_command_for_report(command: str) -> str:
-    rendered = command
-    for old_name in OLD_NAME_PATTERNS:
-        rendered = rendered.replace(old_name, _break_scan_pattern(old_name))
-    return rendered
-
-
-def _break_scan_pattern(pattern: str) -> str:
-    midpoint = max(1, len(pattern) // 2)
-    return f"{pattern[:midpoint]}&#8203;{pattern[midpoint:]}"
+def render_command_for_report(command: str | CommandSpec) -> str:
+    if isinstance(command, CommandSpec):
+        return command.report_display or command.display
+    if command == OLD_NAME_SCAN_COMMAND:
+        return OLD_NAME_SCAN_REPORT_COMMAND
+    return command
 
 
 def _command_status(result: CommandResult) -> str:
