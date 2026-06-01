@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from seektalent_keyword_graph.contracts.snapshot import manifest_identity_sha256
+from seektalent_keyword_graph.domain.normalization import normalize_surface
 from seektalent_keyword_graph.runtime.errors import (
     SnapshotChecksumError,
     SnapshotFormatError,
@@ -212,17 +213,20 @@ class SQLiteSnapshotStore:
     def get_surface_by_query_text(
         self, provider: str, query_text: str, query_mode: str
     ) -> dict[str, object] | None:
+        text_norm = normalize_surface(query_text).text_norm
         return self._fetch_one(
             """
             select s.*
             from provider_recall_observations o
             join surfaces s on s.surface_id = o.surface_id
-            where o.provider = ? and o.query_text = ? and o.query_mode = ?
+            where o.provider = ? and o.query_mode = ?
+              and (o.query_text = ? or s.text_norm = ?)
               and s.serving_status = 'active'
-            order by o.observed_at desc, o.observation_id desc
+            order by case when o.query_text = ? then 0 else 1 end,
+                     o.observed_at desc, o.observation_id desc
             limit 1
             """,
-            (provider, query_text, query_mode),
+            (provider, query_mode, query_text, text_norm, query_text),
         )
 
     def _validate_tables(self) -> None:

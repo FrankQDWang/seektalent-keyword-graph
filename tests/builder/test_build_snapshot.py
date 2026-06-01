@@ -363,6 +363,11 @@ def test_snapshot_store_reads_provider_specific_observations(tmp_path: Path) -> 
         surface = store.get_surface_by_query_text("cts", "Python", "keyword")
         assert surface is not None
         assert surface["surface_id"] == "surface-python"
+        normalized_surface = store.get_surface_by_query_text(
+            "cts", "  python  ", "keyword"
+        )
+        assert normalized_surface is not None
+        assert normalized_surface["surface_id"] == "surface-python"
     finally:
         store.close()
 
