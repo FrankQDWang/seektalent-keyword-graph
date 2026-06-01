@@ -5,8 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from seektalent_keyword_graph.contracts import QueryPlanRequest, QueryPlanResponse
+from seektalent_keyword_graph.contracts import (
+    QueryPlanRequest,
+    QueryPlanResponse,
+    QueryRecallRequest,
+    QueryRecallResponse,
+)
 from seektalent_keyword_graph.runtime.query_planner import QueryPlanner
+from seektalent_keyword_graph.runtime.query_recall import QueryRecallOptimizer
 from seektalent_keyword_graph.runtime.snapshot_store import SQLiteSnapshotStore
 
 
@@ -34,3 +40,18 @@ class KeywordGraph:
             else QueryPlanRequest.model_validate(request)
         )
         return QueryPlanner(self.store).build(parsed_request)
+
+    def analyze_query_recall(
+        self, request: QueryRecallRequest | dict[str, Any]
+    ) -> QueryRecallResponse:
+        parsed_request = (
+            request
+            if isinstance(request, QueryRecallRequest)
+            else QueryRecallRequest.model_validate(request)
+        )
+        return QueryRecallOptimizer(self.store).analyze(parsed_request)
+
+    def optimize_query_terms(
+        self, request: QueryRecallRequest | dict[str, Any]
+    ) -> QueryRecallResponse:
+        return self.analyze_query_recall(request)

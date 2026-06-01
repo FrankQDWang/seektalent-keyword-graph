@@ -210,6 +210,19 @@ class SQLiteSnapshotStore:
             (provider, surface_id),
         )
 
+    def get_latest_surface_recall_observation(
+        self, provider: str, surface_id: str, query_mode: str
+    ) -> dict[str, object] | None:
+        return self._fetch_one(
+            """
+            select * from provider_recall_observations
+            where provider = ? and surface_id = ? and query_mode = ?
+            order by observed_at desc, observation_id desc
+            limit 1
+            """,
+            (provider, surface_id, query_mode),
+        )
+
     def get_surface_by_query_text(
         self, provider: str, query_text: str, query_mode: str
     ) -> dict[str, object] | None:

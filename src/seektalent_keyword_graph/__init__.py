@@ -1,6 +1,11 @@
 """Public package metadata and runtime facade export."""
 
-from seektalent_keyword_graph.contracts import QueryPlanRequest, QueryPlanResponse
+from seektalent_keyword_graph.contracts import (
+    QueryPlanRequest,
+    QueryPlanResponse,
+    QueryRecallRequest,
+    QueryRecallResponse,
+)
 from seektalent_keyword_graph.engine import KeywordGraph
 from seektalent_keyword_graph.runtime.errors import (
     KeywordGraphRuntimeError,
@@ -19,6 +24,8 @@ __all__ = [
     "KeywordGraphRuntimeError",
     "QueryPlanRequest",
     "QueryPlanResponse",
+    "QueryRecallRequest",
+    "QueryRecallResponse",
     "SnapshotChecksumError",
     "SnapshotError",
     "SnapshotFormatError",

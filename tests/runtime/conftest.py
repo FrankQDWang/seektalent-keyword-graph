@@ -33,7 +33,7 @@ def _make_snapshot(path: Path) -> None:
         )
         conn.execute(
             "insert or replace into snapshot_meta(key, value) values (?, ?)",
-            ("provider_sources", '["cts"]'),
+            ("provider_sources", '["cts", "liepin"]'),
         )
         for surface_id, text, bucket in [
             ("surface:python", "Python", "healthy"),
@@ -208,7 +208,7 @@ def _make_snapshot(path: Path) -> None:
             )
             """
         )
-        for surface_id, total, status, observed_at in [
+        cts_observations = [
             ("surface:python", 42, "ok", "2026-05-01T00:00:00Z"),
             ("surface:kubernetes", 900, "ok", "2026-05-01T00:00:00Z"),
             ("surface:docker", 60, "ok", "2026-05-01T00:00:00Z"),
@@ -223,30 +223,56 @@ def _make_snapshot(path: Path) -> None:
             ("surface:vector-search", 35, "ok", "2026-05-01T00:00:00Z"),
             ("surface:aaa-low-quality", 28, "ok", "2026-05-01T00:00:00Z"),
             ("surface:zzz-high-quality", 29, "ok", "2026-05-01T00:00:00Z"),
-        ]:
-            conn.execute(
-                """
-                insert into provider_recall_observations(
-                  observation_id, provider, surface_id, query_text, query_hash,
-                  query_mode, total, latency_ms, status, error_code, observed_at,
-                  recall_bucket, provider_api_version, builder_run_id, evidence_ref
-                ) values (
-                  ?, 'cts', ?, ?, ?, 'keyword', ?, 10, ?, null, ?, ?,
-                  'fixture', 'fixture', ?
+        ]
+        liepin_overrides = {
+            "surface:python": (7, "ok", "too_narrow"),
+            "surface:kubernetes": (40, "ok", "healthy"),
+            "surface:react": (12, "ok", "healthy"),
+        }
+        cts_bucket_overrides = {
+            "surface:kubernetes": "too_wide",
+            "surface:react": "zero",
+            "surface:terraform": "zero",
+            "surface:kafka": "stale",
+            "surface:rails": "zero",
+            "surface:llmops": "unknown",
+        }
+        for provider in ("cts", "liepin"):
+            for surface_id, total, status, observed_at in cts_observations:
+                if provider == "liepin":
+                    total, status, bucket = liepin_overrides.get(
+                        surface_id,
+                        (total, status, "unknown" if status != "ok" else "healthy"),
+                    )
+                else:
+                    bucket = cts_bucket_overrides.get(
+                        surface_id, "unknown" if status != "ok" else "healthy"
+                    )
+                observation_id = f"obs:{provider}:{surface_id}"
+                conn.execute(
+                    """
+                    insert into provider_recall_observations(
+                      observation_id, provider, surface_id, query_text, query_hash,
+                      query_mode, total, latency_ms, status, error_code, observed_at,
+                      recall_bucket, provider_api_version, builder_run_id, evidence_ref
+                    ) values (
+                      ?, ?, ?, ?, ?, 'keyword', ?, 10, ?, null, ?, ?,
+                      'fixture', 'fixture', ?
+                    )
+                    """,
+                    (
+                        observation_id,
+                        provider,
+                        surface_id,
+                        surface_id.removeprefix("surface:"),
+                        f"hash:{provider}:{surface_id}",
+                        total,
+                        status,
+                        observed_at,
+                        bucket,
+                        f"fixture:{observation_id}",
+                    ),
                 )
-                """,
-                (
-                    f"obs:{surface_id}",
-                    surface_id,
-                    surface_id.removeprefix("surface:"),
-                    f"hash:{surface_id}",
-                    total,
-                    status,
-                    observed_at,
-                    "unknown" if status != "ok" else "healthy",
-                    f"fixture:obs:{surface_id}",
-                ),
-            )
         conn.commit()
     finally:
         conn.close()
