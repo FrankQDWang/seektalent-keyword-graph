@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the complete first version of `seektalent-keyword-graph`: an installable runtime package plus internal builder pipeline that imports JD fixtures, extracts keyword evidence, builds a SQLite snapshot with CTS recall summaries, and returns deterministic SeekTalent query bundles.
+**Goal:** Build the complete first version of `seektalent-keyword-graph`: an installable runtime package plus internal builder pipeline that imports JD fixtures, extracts keyword evidence, builds a provider-aware SQLite snapshot, returns deterministic SeekTalent query bundles, and optimizes SeekTalent query term pools through local Query Recall Optimization.
 
-**Architecture:** The package has a hard runtime/builder split. Runtime reads a validated readonly SQLite snapshot and performs local concept resolution, surface selection, and bundle building. Builder commands create build DB state from JD fixtures, derive graph evidence, run fake or explicitly gated CTS probe flows, build/validate snapshot artifacts, and produce release reports.
+**Architecture:** The package has a hard runtime/builder split. Runtime reads a validated readonly SQLite snapshot and performs local concept resolution, surface selection, bundle building, provider-aware recall lookup, and query term optimization without network I/O. Builder commands create build DB state from JD fixtures, derive graph evidence, run fake or explicitly gated provider probe flows, build/validate snapshot artifacts, and produce release reports.
 
 **Tech Stack:** Python 3.12+, uv, hatchling, Pydantic v2, SQLite, httpx for builder-only CTS HTTP, pytest, ruff, JSONL, CSV, gzip, sha256 manifests.
 
@@ -15,6 +15,12 @@
 ## Planning Status
 
 This plan supersedes the 2026-05-30 S0-S19 plan for build execution. The old plan is not an approved build input because it allows incomplete runtime behavior, fixed fixture shortcuts, help-only CLI paths, and empty/constant outputs. This plan is intentionally larger because the requested deliverable is a complete first version, not a demo slice.
+
+The 2026-06-01 scope update adds SeekTalent Query Recall Optimization as a
+first-version runtime requirement. Current `build_query_plan` behavior remains
+in scope, but it is not sufficient by itself. Subsequent build execution must
+add provider-aware recall observations and public runtime APIs for analyzing and
+optimizing existing SeekTalent query term pools before provider retrieval.
 
 ## Selected Execution Mode
 
@@ -57,9 +63,12 @@ not corrupted by overlapping writes.
 ### Contracts
 
 - `src/seektalent_keyword_graph/contracts/query_plan.py`: Pydantic request/response and nested query models.
+- `src/seektalent_keyword_graph/contracts/query_recall.py`: Pydantic provider-aware query recall analysis, alternatives, term-pool actions, and optimized term pool models.
 - `src/seektalent_keyword_graph/contracts/snapshot.py`: snapshot manifest and meta Pydantic models.
 - `contracts/query-plan/*.json`: examples and generated JSON schemas.
+- `contracts/query-recall/*.json`: examples and generated JSON schemas for `analyze_query_recall` and `optimize_query_terms`.
 - `docs/query-plan-contract.md`: field semantics and compatibility rules.
+- `docs/query-recall-optimization.md`: field semantics, provider behavior, and SeekTalent term-pool usage.
 
 ### Domain
 
@@ -68,6 +77,7 @@ not corrupted by overlapping writes.
 - `src/seektalent_keyword_graph/domain/classification.py`: language, token class, company/department/generic heuristics.
 - `src/seektalent_keyword_graph/domain/scoring.py`: recall bucket, serving score, freshness, ambiguity/specificity scoring.
 - `src/seektalent_keyword_graph/domain/policies.py`: rejection reasons and bundle eligibility.
+- `src/seektalent_keyword_graph/domain/provider_recall.py`: provider-aware recall bucket and action recommendation policy.
 
 ### Storage
 
@@ -83,6 +93,7 @@ not corrupted by overlapping writes.
 - `src/seektalent_keyword_graph/runtime/surface_selector.py`: expansion, rejection, scoring, deterministic ranking.
 - `src/seektalent_keyword_graph/runtime/bundle_builder.py`: anchor/precision/alias_probe/exploration/fallback bundle assembly.
 - `src/seektalent_keyword_graph/runtime/query_planner.py`: orchestrates runtime planning and lineage.
+- `src/seektalent_keyword_graph/runtime/query_recall.py`: provider-aware observation lookup, alternative expansion, and term-pool optimization.
 
 ### Builder
 
@@ -94,7 +105,7 @@ not corrupted by overlapping writes.
 - `src/seektalent_keyword_graph/builder/build_relations.py`: concept clustering, alias evidence, relation persistence.
 - `src/seektalent_keyword_graph/builder/cooccurrence.py`: co-occurrence metrics and persistence.
 - `src/seektalent_keyword_graph/builder/sampling_report.py`: CSV/JSONL risk report generation.
-- `src/seektalent_keyword_graph/builder/cts_probe.py`: probe job scheduling and fake/dry-run observation persistence.
+- `src/seektalent_keyword_graph/builder/cts_probe.py`: CTS-first probe job scheduling and fake/dry-run provider observation persistence.
 - `src/seektalent_keyword_graph/builder/build_snapshot.py`: projects build DB to runtime snapshot and artifacts.
 - `src/seektalent_keyword_graph/builder/validate_snapshot.py`: schema, referential, privacy, replay, size validation.
 
@@ -128,7 +139,8 @@ not corrupted by overlapping writes.
 - `tests/snapshot/`: schema and bad snapshot tests.
 - `tests/builder/`: import/extract/relation/probe/snapshot builder tests.
 - `tests/runtime/`: snapshot store, resolver, selector, bundle builder, query planner tests.
-- `tests/integration/`: CLI fixture flow and JD-to-runtime end-to-end tests.
+- `tests/runtime/test_query_recall.py`: single-query recall analysis, provider-aware observations, alternatives, warnings, and optimized term-pool actions.
+- `tests/integration/`: CLI fixture flow, JD-to-runtime end-to-end tests, and query-term-pool recall optimization tests.
 - `tests/architecture/`: import boundaries, no SeekTalent import, no runtime CTS env read.
 - `tests/fixtures/jds/`: small JSONL corpus covering anchor, precision, alias, exploration, fallback, blocked terms.
 - `tests/fixtures/cts/`: fake totals and mocked HTTP responses.
@@ -147,11 +159,13 @@ not corrupted by overlapping writes.
 | T7 | M4 | Probe jobs, rate limit, window, TTL, retry, dry-run observations |
 | T8 | M5 | Snapshot build, manifest, checksum, validation |
 | T9 | M5 | Runtime resolver, selector, bundle builder, query planner |
-| T10 | M2-M5 | Real local CLI command flows |
-| T11 | M5 | Replay evaluation and full JD-to-runtime integration |
-| T12 | M6 | SeekTalent consumer contracts and docs |
-| T13 | M7 | Release hardening, import boundaries, wheel smoke |
-| T14 | M7 | Readiness report and final verification |
+| T10 | M1/M5 | Provider-aware recall schema, contracts, and snapshot migration |
+| T11 | M5/M6 | Runtime Query Recall Optimization API |
+| T12 | M2-M5 | Real local CLI command flows |
+| T13 | M5 | Replay evaluation and JD/query-recall integration |
+| T14 | M6 | SeekTalent consumer contracts and docs |
+| T15 | M7 | Release hardening, import boundaries, wheel smoke |
+| T16 | M7 | Readiness report and final verification |
 
 ---
 
@@ -746,7 +760,7 @@ git commit -m "feat: add gated cts probe runner"
 Tests must prove:
 
 - build snapshot projects concepts, surfaces, relations, co-occurrence, and latest
-  valid CTS observations from build DB;
+  valid provider recall observations from build DB;
 - all required runtime tables/indexes/meta keys exist;
 - manifest and checksum are written and match snapshot bytes;
 - compressed snapshot is produced;
@@ -768,9 +782,9 @@ Expected: FAIL because snapshot build and validation are absent.
 - [ ] **Step 2: Implement snapshot build and validation**
 
 Project build DB rows into runtime schema with deterministic ordering, latest
-valid observation selection, recall bucket calculation, build report hash,
-manifest sha256, gzip compression, privacy scan, referential checks, and release
-validation result object.
+valid provider observation selection, recall bucket calculation, build report
+hash, manifest sha256, gzip compression, privacy scan, referential checks, and
+release validation result object.
 
 - [ ] **Step 3: Verify snapshot artifacts**
 
@@ -863,7 +877,201 @@ git commit -m "feat: plan recall-aware query bundles"
 
 ---
 
-### Task T10: Real Local CLI Command Flows
+### Task T10: Provider-Aware Recall Schema, Contracts, and Snapshot Migration
+
+**Files:**
+- Create: `src/seektalent_keyword_graph/contracts/query_recall.py`
+- Create: `src/seektalent_keyword_graph/domain/provider_recall.py`
+- Modify: `src/seektalent_keyword_graph/contracts/__init__.py`
+- Modify: `src/seektalent_keyword_graph/storage/sqlite_schema.py`
+- Modify: `src/seektalent_keyword_graph/runtime/snapshot_store.py`
+- Modify: `src/seektalent_keyword_graph/builder/build_store.py`
+- Modify: `src/seektalent_keyword_graph/builder/cts_probe.py`
+- Modify: `src/seektalent_keyword_graph/builder/build_snapshot.py`
+- Create: `contracts/query-recall/request.example.json`
+- Create: `contracts/query-recall/response.example.json`
+- Create: `contracts/query-recall/query-recall-request.schema.json`
+- Create: `contracts/query-recall/query-recall-response.schema.json`
+- Create: `tests/contract/test_query_recall_contract.py`
+- Modify: `tests/builder/test_build_store_schema.py`
+- Modify: `tests/builder/test_cts_probe_runner.py`
+- Modify: `tests/builder/test_build_snapshot.py`
+- Modify: `tests/snapshot/test_snapshot_store_negative.py`
+
+- [ ] **Step 1: Write provider-aware contract and schema tests**
+
+Tests must prove:
+
+- `QueryRecallRequest` accepts either `query_text` or non-empty `query_terms`
+  and rejects blank requests;
+- provider is required and supports strings such as `cts`, `liepin`, and `boss`
+  without CTS-only enums;
+- `QueryRecallResponse` contains input observation, candidate observations,
+  relation provenance, recommendations, warnings, optimized term pool, and
+  deterministic lineage;
+- generated schemas and example JSON validate through Pydantic;
+- examples contain provider-aware rows and are not copied query-plan examples.
+
+Run:
+
+```bash
+uv run pytest tests/contract/test_query_recall_contract.py -q
+```
+
+Expected: FAIL because query recall contracts and examples are absent.
+
+- [ ] **Step 2: Write provider-aware storage/snapshot tests**
+
+Tests must prove:
+
+- build DB migrations create `provider_recall_observations` and provider-aware
+  `probe_jobs`;
+- CTS fake/dry-run probe persists rows with `provider='cts'` and
+  `provider_api_version` plus provider-specific `recall_bucket`, not a CTS-only
+  observation contract;
+- runtime snapshot contains `provider_recall_observations` plus indexes on
+  `(provider, surface_id, observed_at)` and
+  `(provider, query_hash, query_mode, observed_at)`;
+- snapshot store can look up latest observation by provider, surface, query
+  hash, and query mode;
+- validation rejects unsupported provider requests, missing provider observation
+  tables, missing provider indexes, and a serving surface with no valid provider
+  observation unless policy marks it stale/unknown.
+- tests prove `surfaces.recall_bucket` is only a default serving bucket and that
+  Query Recall Optimization reads provider-specific buckets from
+  `provider_recall_observations`.
+
+Run:
+
+```bash
+uv run pytest tests/builder/test_build_store_schema.py tests/builder/test_cts_probe_runner.py tests/builder/test_build_snapshot.py tests/snapshot/test_snapshot_store_negative.py -q
+```
+
+Expected: FAIL because storage and snapshot are still CTS-table-only.
+
+- [ ] **Step 3: Implement provider-aware contracts and schema migration**
+
+Implement:
+
+- `src/seektalent_keyword_graph/contracts/query_recall.py` models for request
+  terms, observations, alternatives, recommendations, optimized terms,
+  warnings, lineage, and response;
+- exports from `contracts/__init__.py`;
+- provider-aware build and runtime SQL tables/indexes;
+- snapshot projection from CTS-first builder rows into the canonical provider
+  observation table;
+- snapshot store methods:
+  `list_supported_providers()`,
+  `get_latest_recall_observation(provider, surface_id, query_hash, query_mode)`,
+  `list_surface_recall_observations(provider, surface_id)`, and
+  `get_surface_by_query_text(provider, query_text, query_mode)`.
+
+Do not add runtime provider clients or network code.
+
+- [ ] **Step 4: Verify provider-aware migration**
+
+Run:
+
+```bash
+uv run pytest tests/contract/test_query_recall_contract.py tests/builder/test_build_store_schema.py tests/builder/test_cts_probe_runner.py tests/builder/test_build_snapshot.py tests/snapshot/test_snapshot_store_negative.py -q
+uv run pytest tests/architecture -q
+uv run ruff check src tests
+```
+
+Expected: all commands exit 0.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src tests contracts
+git commit -m "feat: add provider-aware recall contracts and snapshot schema"
+```
+
+---
+
+### Task T11: Runtime Query Recall Optimization API
+
+**Files:**
+- Create: `src/seektalent_keyword_graph/runtime/query_recall.py`
+- Modify: `src/seektalent_keyword_graph/engine.py`
+- Modify: `src/seektalent_keyword_graph/domain/provider_recall.py`
+- Modify: `src/seektalent_keyword_graph/runtime/snapshot_store.py`
+- Create: `tests/runtime/test_query_recall.py`
+- Create: `tests/integration/test_query_recall_optimization.py`
+
+- [ ] **Step 1: Write runtime recall optimization tests**
+
+Tests must prove:
+
+- `KeywordGraph.analyze_query_recall` accepts a single `query_text` and returns
+  the requested provider's latest observation;
+- `KeywordGraph.optimize_query_terms` accepts multiple SeekTalent query terms
+  and returns deterministic optimized term ordering and actions;
+- same-concept alias, abbreviation, equivalent, normalized, and version surfaces
+  are returned with relation type, confidence, source/target surface IDs,
+  source concept ID, evidence type, and evidence ref;
+- every candidate includes the requested provider observation when present and
+  an unknown-observation marker when absent;
+- unsupported provider raises a typed error;
+- query no-match returns score-only/fallback guidance without fabricated graph
+  provenance;
+- matched-without-observation is distinct from no-match;
+- zero recall suggests replacement or alias probe when an observed alternative
+  is healthier;
+- too-wide recall suggests precision companion when a strong co-occurrence
+  surface has healthier provider recall;
+- stale and unknown observations are flagged and do not silently become anchors;
+- cts/liepin/boss fixture rows remain distinct for the same surface/query.
+
+Run:
+
+```bash
+uv run pytest tests/runtime/test_query_recall.py tests/integration/test_query_recall_optimization.py -q
+```
+
+Expected: FAIL because the runtime recall optimizer API is absent.
+
+- [ ] **Step 2: Implement runtime optimizer**
+
+Implement `runtime/query_recall.py` using only `SQLiteSnapshotStore`, contracts,
+and domain policy helpers. The implementation must:
+
+- normalize input queries and resolve active surfaces/concepts;
+- read provider observations from the snapshot only;
+- expand alternatives through active concept membership and relations;
+- add precision companions from strong co-occurrence edges;
+- score and sort alternatives deterministically using provider recall bucket,
+  relation confidence, specificity, ambiguity, concept stability, freshness, and
+  input order;
+- produce explicit actions: `keep`, `downrank`, `replace`,
+  `add_alias_probe`, `add_precision_companion`, `score_only`, and `fallback`;
+- populate lineage with input hash, snapshot ID, snapshot schema version,
+  provider, policy version, and source refs;
+- expose `KeywordGraph.analyze_query_recall()` and
+  `KeywordGraph.optimize_query_terms()`.
+
+- [ ] **Step 3: Verify runtime optimizer**
+
+Run:
+
+```bash
+uv run pytest tests/runtime/test_query_recall.py tests/integration/test_query_recall_optimization.py -q
+uv run pytest tests/runtime tests/architecture -q
+uv run ruff check src tests
+```
+
+Expected: all commands exit 0.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src tests
+git commit -m "feat: optimize query recall from provider snapshot"
+```
+
+---
+
+### Task T12: Real Local CLI Command Flows
 
 **Files:**
 - Modify: `src/seektalent_keyword_graph/cli.py`
@@ -879,8 +1087,8 @@ Tests must prove:
 - `extract-surfaces` updates the build DB and writes extraction report;
 - `build-relations` updates concept/relation/co-occurrence tables and writes
   sampling CSV/JSONL;
-- `probe-cts --dry-run --fake-response` writes fake observations and no real CTS
-  call occurs;
+- `probe-cts --dry-run --fake-response` writes provider-aware fake observations
+  with `provider='cts'` and no real CTS call occurs;
 - `build-snapshot` writes snapshot, manifest, compressed artifact, and build
   report;
 - `validate-snapshot` exits 0 for valid artifacts and non-zero for invalid ones;
@@ -923,13 +1131,14 @@ git commit -m "feat: wire real local keyword graph cli flows"
 
 ---
 
-### Task T11: Replay Evaluation and Full JD-to-Runtime Integration
+### Task T13: Replay Evaluation and Full JD-to-Runtime Integration
 
 **Files:**
 - Create: `src/seektalent_keyword_graph/observability/replay_report.py`
 - Create: `scripts/run_fixture_flow.py`
 - Create: `tests/fixtures/eval_jds/*.jsonl`
 - Create: `tests/integration/test_jd_to_query_plan.py`
+- Create: `tests/integration/test_query_recall_optimization.py`
 - Create: `tests/integration/test_replay_report.py`
 
 - [ ] **Step 1: Write integration/replay tests**
@@ -938,19 +1147,22 @@ Tests must prove the full fixture flow:
 
 ```text
 JD JSONL -> build DB -> sections -> mentions -> concepts/relations/cooccurrence
--> fake CTS observations -> runtime snapshot + manifest -> KeywordGraph.open
--> build_query_plan
+-> provider-aware fake CTS observations -> runtime snapshot + manifest -> KeywordGraph.open
+-> build_query_plan and optimize_query_terms
 ```
 
 The fixture set must include cases that produce each bundle type and at least one
-blocked company/department term. Replay report tests must assert case count,
-bundle type counts, warning counts, rejected reason counts, and deterministic
-stability across two runs.
+blocked company/department term. It must also include a query term pool with
+zero recall, too-wide recall, stale observation, unknown observation, no-match,
+matched-without-observation, and cts/liepin/boss provider distinction. Replay
+report tests must assert case count, bundle type counts, warning counts,
+rejected reason counts, query recall action counts, provider observation status
+counts, and deterministic stability across two runs.
 
 Run:
 
 ```bash
-uv run pytest tests/integration/test_jd_to_query_plan.py tests/integration/test_replay_report.py -q
+uv run pytest tests/integration/test_jd_to_query_plan.py tests/integration/test_query_recall_optimization.py tests/integration/test_replay_report.py -q
 ```
 
 Expected: FAIL until the full local flow and report are wired.
@@ -958,14 +1170,15 @@ Expected: FAIL until the full local flow and report are wired.
 - [ ] **Step 2: Implement fixture flow and replay report**
 
 Create reusable fixture flow script using package APIs, not shell-only glue.
-Replay report must serialize JSON with summary metrics and per-case lineage.
+Replay report must serialize JSON with summary metrics, provider recall summary,
+term-pool action summary, and per-case lineage.
 
 - [ ] **Step 3: Verify integration**
 
 Run:
 
 ```bash
-uv run pytest tests/integration/test_jd_to_query_plan.py tests/integration/test_replay_report.py -q
+uv run pytest tests/integration/test_jd_to_query_plan.py tests/integration/test_query_recall_optimization.py tests/integration/test_replay_report.py -q
 uv run python scripts/run_fixture_flow.py --work-dir /tmp/kg-fixture-flow
 uv run ruff check src tests scripts
 ```
@@ -976,19 +1189,22 @@ Expected: all commands exit 0.
 
 ```bash
 git add src scripts tests
-git commit -m "test: add jd to query plan integration flow"
+git commit -m "test: add jd and query recall integration flow"
 ```
 
 ---
 
-### Task T12: SeekTalent Consumer Contracts and Docs
+### Task T14: SeekTalent Consumer Contracts and Docs
 
 **Files:**
 - Create: `docs/seektalent-integration.md`
 - Create: `docs/query-plan-contract.md`
+- Create: `docs/query-recall-optimization.md`
 - Create: `tests/contract/test_consumer_contract.py`
 - Modify: `contracts/query-plan/request.example.json`
 - Modify: `contracts/query-plan/response.example.json`
+- Modify: `contracts/query-recall/request.example.json`
+- Modify: `contracts/query-recall/response.example.json`
 
 - [ ] **Step 1: Write consumer contract tests**
 
@@ -996,11 +1212,16 @@ Tests must prove:
 
 - `SEEKTALENT_KEYWORD_GRAPH_*` config model loads runtime settings only;
 - no `KEYWORD_GRAPH_CTS_*` env is read by runtime config;
-- a sample consumer can call `KeywordGraph.open` and `build_query_plan`;
+- a sample consumer can call `KeywordGraph.open`, `build_query_plan`,
+  `analyze_query_recall`, and `optimize_query_terms`;
 - missing package/snapshot is represented as `keyword_graph_unavailable` in the
   documented fail-open adapter example;
-- request/response examples include real bundles and lineage from the fixture
-  snapshot;
+- query-plan and query-recall examples include real bundles, provider-aware
+  observations, term-pool actions, and lineage from the fixture snapshot;
+- docs define `SEEKTALENT_KEYWORD_GRAPH_DEFAULT_PROVIDER` and
+  `SEEKTALENT_KEYWORD_GRAPH_MAX_ALTERNATIVES`;
+- docs place Query Recall Optimization between SeekTalent query term pool
+  generation and provider retrieval without modifying SeekTalent main project;
 - no SeekTalent module import exists.
 
 Run:
@@ -1013,9 +1234,10 @@ Expected: FAIL because consumer docs/examples/config behavior are absent.
 
 - [ ] **Step 2: Implement docs and examples**
 
-Document env vars, failure mode, artifacts, no-CTS-user boundary, package import
-example, fail-open adapter pseudocode, and contract compatibility rules. Update
-examples from fixture flow output.
+Document env vars, failure mode, artifacts, no-CTS-user boundary, no runtime
+network I/O boundary, package import example, fail-open adapter pseudocode,
+query-plan contract rules, query-recall optimization contract rules, and
+contract compatibility rules. Update examples from fixture flow output.
 
 - [ ] **Step 3: Verify consumer contract**
 
@@ -1037,7 +1259,7 @@ git commit -m "docs: add seektalent consumer contract"
 
 ---
 
-### Task T13: Release Hardening, Import Boundaries, and Wheel Smoke
+### Task T15: Release Hardening, Import Boundaries, and Wheel Smoke
 
 **Files:**
 - Create: `docs/release-checklist.md`
@@ -1054,13 +1276,15 @@ git commit -m "docs: add seektalent consumer contract"
 Tests must prove:
 
 - runtime modules do not import builder/CTS;
+- runtime modules do not import live provider clients or call network APIs;
 - domain modules do not import runtime/builder/CTS;
 - package modules do not import SeekTalent;
 - package import does not read CTS env;
 - wheel builds and installs into a temp venv;
 - installed wheel can import package and open a fixture snapshot;
 - artifact validation rejects secrets, candidate markers, resume markers,
-  checksum mismatch, missing manifest, and oversized compressed artifact;
+  checksum mismatch, missing manifest, CTS-only observation tables, missing
+  provider-aware recall indexes, and oversized compressed artifact;
 - rollback docs and release checklist contain required commands and gates.
 
 Run:
@@ -1097,7 +1321,7 @@ git commit -m "chore: harden release and architecture gates"
 
 ---
 
-### Task T14: Readiness Report and Final Verification
+### Task T16: Readiness Report and Final Verification
 
 **Files:**
 - Modify: `scripts/write_readiness_report.py`
@@ -1110,6 +1334,8 @@ Tests must prove:
 - report generation runs the exact final commands;
 - report contains current HEAD;
 - report maps every M0-M7 acceptance item to a test or command;
+- report separately lists Query Recall Optimization completion status,
+  provider-aware snapshot status, and verification commands;
 - report includes explicit incomplete items section, even when empty;
 - report does not contain blank statuses;
 - report records old-name scan exit 1 as success/no matches.
@@ -1136,6 +1362,7 @@ rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_i
   README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs
 uv run pytest tests/integration/test_cli_end_to_end.py -q
 uv run pytest tests/integration/test_jd_to_query_plan.py -q
+uv run pytest tests/integration/test_query_recall_optimization.py -q
 ```
 
 It must also run the fixture snapshot build + manifest + checksum + validation
@@ -1170,6 +1397,7 @@ rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_i
   README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs
 uv run pytest tests/integration/test_cli_end_to_end.py -q
 uv run pytest tests/integration/test_jd_to_query_plan.py -q
+uv run pytest tests/integration/test_query_recall_optimization.py -q
 ```
 
 Expected:
@@ -1190,21 +1418,22 @@ git commit -m "docs: report full keyword graph readiness"
 
 ### Spec Coverage
 
-- M0 is covered by T0 and T13/T14 wheel/import verification.
-- M1 is covered by T1, T2, and T9 runtime behavior.
-- M2 is covered by T3 and T10 CLI execution.
+- M0 is covered by T0 and T15/T16 wheel/import verification.
+- M1 is covered by T1, T2, T9 runtime behavior, and T10 query recall contracts.
+- M2 is covered by T3 and T12 CLI execution.
 - M3 is covered by T4 and T5.
 - M4 is covered by T6 and T7.
-- M5 is covered by T8, T9, T10, and T11.
-- M6 is covered by T12.
-- M7 is covered by T13 and T14.
+- M5 is covered by T8, T9, T10, T11, T12, and T13.
+- M6 is covered by T14.
+- M7 is covered by T15 and T16.
 
 ### Anti-Shortcut Coverage
 
 - T0 adds production-source shortcut guards.
 - Every task starts with acceptance tests that fail before implementation.
 - CLI tests require local data mutation and artifact output, not help text.
-- Integration tests require JD fixture -> build DB -> snapshot -> runtime query.
+- Integration tests require JD fixture -> build DB -> snapshot -> runtime query
+  plan and query-term-pool recall optimization.
 - Readiness report must list incomplete items explicitly.
 
 ### Type and Naming Consistency
@@ -1215,6 +1444,9 @@ git commit -m "docs: report full keyword graph readiness"
 - CLI command: `keyword-graph`.
 - Runtime env prefix: `SEEKTALENT_KEYWORD_GRAPH_`.
 - Builder CTS env prefix: `KEYWORD_GRAPH_CTS_`.
+- Provider-aware recall table: `provider_recall_observations`.
+- Query recall schemas: `query-recall-request-v1` and
+  `query-recall-response-v1`.
 - Snapshot schema: `snapshot-v1`.
 - Selection policy: `policy-v1`.
 
@@ -1224,148 +1456,105 @@ This plan is ready for `fw-plan-review`. No UI/UX work is in scope, so
 `plan-design-review` should be skipped unless the reviewer identifies a hidden
 user-facing surface beyond CLI/docs/contracts.
 
-## GSTACK PLAN REVIEW REPORT
+## Plan Review Status
+
+The previous plan-review report was superseded by the 2026-06-01 Query Recall
+Optimization scope update. The updated plan has now been re-reviewed with the
+`fw-plan-review` engineering gate. Raw gstack telemetry, routing, and local
+analytics instructions were treated as reference-only under the wrapper safety
+adapter.
 
 | Review | Trigger | Why | Runs | Status | Findings |
 | --- | --- | --- | --- | --- | --- |
-| Eng Review | `fw-plan-review` | Architecture, code quality, tests, performance | 1 | CLEARED | 1 P1 gate-specific issue found and addressed inline; no remaining P1/P2 blockers |
-| Design Review | `fw-plan-review` | UI/UX gaps | 0 | SKIPPED | No UI, visual workflow, or user-facing screen scope |
+| Eng Review | `fw-plan-review` | Architecture, code quality, tests, performance | 1 | CLEARED | One schema issue found and fixed inline: provider-specific recall bucket belongs on provider observation rows, not only on `surfaces`. No remaining P1/P2 blockers. |
+| Design Review | `fw-plan-review` | UI/UX gaps | 0 | SKIPPED | No UI, visual workflow, or user-facing screen scope. CLI/docs/contracts only. |
 
 ### Step 0 Scope Challenge
 
-This plan intentionally touches far more than 8 files and introduces multiple
-modules because the requested deliverable is a new package, internal builder,
-snapshot artifact pipeline, runtime selector, CLI, contracts, and release
-validation. Reducing the scope to fewer modules would recreate the rejected
-2026-05-30 MVP shape and would fail the user's explicit requirement for a
-complete first version.
+Existing code through `de87d9e` partially covers T0-T9: package foundation,
+runtime contracts, build/runtime SQLite stores, JD import/extraction, graph
+evidence, CTS fake/dry-run paths, snapshot build, and query bundle planning.
+The 2026-06-01 update adds a real new runtime product path, so the right scope
+change is not to discard T0-T9 but to add T10/T11 and extend T13/T14/T16.
 
-Existing code does not partially solve the implementation because the previous
-generated source tree was removed. The remaining repository content is planning
-documentation only. Reusing SeekTalent main-project code is out of scope because
-the package must not import SeekTalent or modify the SeekTalent project.
-
-Scope accepted as-is with two controls:
-
-- every task is gated by acceptance tests before implementation;
-- execution will use sequential subagent-driven tasks with spec and quality
-  review after each task.
+The plan touches many files and introduces more than two new models/services,
+but this is expected for a complete first version. Reducing scope would violate
+the explicit product requirement that Query Recall Optimization be first-version
+runtime behavior, not a future placeholder. The plan keeps the change bounded by
+using the existing SQLite snapshot, contracts package, runtime facade, and
+builder probe flow instead of adding a service, network runtime, or new storage
+system.
 
 ### Architecture Review
 
-`[P1] (confidence: 9/10) docs/superpowers/specs/2026-05-31-keyword-graph-full-m0-m7.md:303` — The initial plan said real CTS required an explicit gate, but did not define a concrete, testable gate mechanism. That left room for ambiguous implementation and could allow a worker to invent a permissive flag.
+No remaining P1/P2 architecture blockers.
 
-Resolution applied:
+The key issue found during review was a provider-aware modeling gap: a single
+`surfaces.recall_bucket` cannot represent a surface that is healthy for `cts`
+but stale, too-wide, or unknown for `liepin` or `boss`. The spec and T10 now
+require `provider_recall_observations.recall_bucket`, with
+`surfaces.recall_bucket` limited to a documented default serving bucket for
+legacy query bundle selection.
 
-- real CTS now requires `--real`, `--gate-file PATH`, exact first-line content
-  `REAL_CTS_ALLOWED_FOR_KEYWORD_GRAPH`, valid credentials, and configured time
-  window;
-- gated success can be tested only with mocked HTTP;
-- CLI and probe-runner tests must cover missing, invalid, and valid mocked gate
-  paths.
-
-No remaining architecture blockers found. The dependency graph preserves the
-runtime/builder/CTS split:
-
-```text
-contracts -> domain
-runtime   -> contracts + domain + storage
-engine    -> runtime + contracts
-builder   -> contracts + domain + storage + cts
-cli       -> builder + release validation
-cts       -> httpx + fake/mocked probe behavior
-```
+Runtime remains correctly bounded: no provider clients, no CTS import, no
+provider credential env reads, no network I/O, and no SeekTalent import. Builder
+keeps live probing behind fake/dry-run/default-safe and explicit real CTS gate
+flows.
 
 ### Code Quality Review
 
-No P1/P2 code-organization blockers found in the plan. The file map is larger
-than a small feature, but it is split by responsibility:
+No remaining P1/P2 code-quality planning blockers.
 
-- contracts own public API shape;
-- domain owns pure rules;
-- storage owns SQLite schema/migrations/scans;
-- runtime owns read-only planning;
-- builder owns stateful construction;
-- CTS owns builder-only count probing;
-- release/observability own artifact evidence.
-
-Potential lower-severity risk to watch during `fw-build`: avoid turning
-`BuildStore` or `SQLiteSnapshotStore` into broad god objects. If either grows
-too large during implementation, split query groups by responsibility while
-keeping the public store API stable.
+The main watch item for `fw-build` is store growth. T10/T11 add provider-aware
+lookup APIs to `SQLiteSnapshotStore`; implementation should keep those methods
+small and query-specific, and split helper modules if store code becomes a broad
+god object. The plan avoids speculative provider client abstractions in runtime.
 
 ### Test Review
 
-The plan includes acceptance-level tests for each meaningful code path before
-implementation. Coverage target is complete behavior coverage rather than smoke
-tests.
+The updated plan covers the new product path with acceptance tests before
+implementation.
 
 ```text
 CODE PATHS
-[+] Package foundation
-  ├── [PLANNED] uv sync/tool smoke
-  ├── [PLANNED] source import
-  ├── [PLANNED] wheel build/install smoke
-  └── [PLANNED] anti-shortcut/import-boundary scanners
-[+] Contracts
-  ├── [PLANNED] request defaults and enum validation
-  ├── [PLANNED] nested response models for all bundle types
-  ├── [PLANNED] examples validate through models
+[+] Provider-aware contracts
+  ├── [PLANNED] query_text or query_terms validation
+  ├── [PLANNED] provider string support for cts/liepin/boss
+  ├── [PLANNED] examples validate through Pydantic models
   └── [PLANNED] generated JSON schemas match committed schemas
-[+] Build DB and import
-  ├── [PLANNED] migrations idempotent
-  ├── [PLANNED] JD import dedupe and bad-record report
-  ├── [PLANNED] section offsets and requirement strength
-  └── [PLANNED] extraction report with blocked reasons
-[+] Graph builder
-  ├── [PLANNED] normalization and classification edge cases
-  ├── [PLANNED] k8s/Kubernetes evidence-based merge
-  ├── [PLANNED] Vue/React non-merge
-  ├── [PLANNED] relation evidence persistence
-  └── [PLANNED] co-occurrence + sampling CSV/JSONL
-[+] CTS builder-only flow
-  ├── [PLANNED] fake success/zero/timeout/429/5xx/auth/network
-  ├── [PLANNED] mocked real HTTP payload and parsing
-  ├── [PLANNED] RPS/concurrency/window/TTL/retry/auth pause
-  └── [PLANNED] real CTS gate failure without valid gate file
-[+] Snapshot and runtime
-  ├── [PLANNED] snapshot build from build DB
-  ├── [PLANNED] manifest/checksum/compression/privacy validation
-  ├── [PLANNED] negative snapshot cases
-  ├── [PLANNED] anchor/precision/alias_probe/exploration/fallback
-  └── [PLANNED] deterministic JD-to-query-plan integration
-[+] CLI and release
-  ├── [PLANNED] every CLI command mutates local DB or writes artifacts
-  ├── [PLANNED] validate-snapshot success/failure
-  ├── [PLANNED] old-name scan
-  └── [PLANNED] readiness report maps M0-M7 to evidence
-
-COVERAGE: 38/38 planned code-path groups covered by tests
-QUALITY: smoke-only assertions are explicitly rejected by T0/T14 gates
+[+] Provider-aware storage and snapshot
+  ├── [PLANNED] provider_recall_observations migration and indexes
+  ├── [PLANNED] CTS fake/dry-run persists provider='cts'
+  ├── [PLANNED] snapshot projection keeps provider/source distinction
+  └── [PLANNED] invalid/missing provider observation cases fail validation
+[+] Runtime Query Recall Optimization
+  ├── [PLANNED] single query lookup
+  ├── [PLANNED] multi-term pool optimization
+  ├── [PLANNED] alias/abbreviation/equivalent/normalized expansion
+  ├── [PLANNED] no match versus matched-without-observation
+  ├── [PLANNED] zero/too-wide/too-narrow/stale/unknown recommendations
+  └── [PLANNED] optimized term actions for keep/downrank/replace/alias/precision/score-only/fallback
+[+] Integration and release
+  ├── [PLANNED] build DB -> provider-aware snapshot -> optimize_query_terms
+  ├── [PLANNED] query recall docs/examples/consumer tests
+  ├── [PLANNED] release validation rejects CTS-only snapshot regression
+  └── [PLANNED] readiness report lists Query Recall Optimization separately
 ```
 
-No remaining test blockers found. The key future review point is to ensure
-subagents write behavior tests matching these requirements rather than only
-checking function existence.
+No missing critical test path remains in the plan. During build, every T10/T11
+test must be observed red before implementation.
 
 ### Performance Review
 
-No P1/P2 performance blockers found. The plan uses boring local technology:
+No remaining P1/P2 performance blockers.
 
-- SQLite build DB for internal state;
-- SQLite read-only snapshot for runtime;
-- indexed lookup and bounded relation expansion;
-- no service process, queue, Redis, graph DB, or Docker runtime;
-- conservative CTS probe defaults of 1 RPS and concurrency 1.
-
-Performance risks are covered by planned indexes, deterministic query limits,
-and release validation on compressed snapshot size. During build, add targeted
-tests for `EXPLAIN QUERY PLAN` only if fixture queries show accidental table
-scans on hot runtime paths.
+The runtime stays local and read-only. Hot lookup paths are indexed by provider,
+surface, query hash, query mode, and observed time. Alternative expansion is
+bounded by request limits and concept/relation edges in the snapshot. The plan
+does not add services, queues, graph DBs, or runtime network calls.
 
 ### Verdict
 
-PLAN REVIEW CLEARED for implementation planning purposes.
-
-Per repository stage gates, stop before `fw-build`. The next stage should use
-`fw-build` with `superpowers:subagent-driven-development` as selected above.
+PLAN REVIEW CLEARED for the updated Query Recall Optimization scope. Per
+repository stage gates, stop before further `fw-build` until the user confirms
+resuming build execution from the updated plan.

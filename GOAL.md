@@ -7,8 +7,8 @@
 核心产物分两层：
 
 1. 我们离线构建并发布的 SQLite 图谱快照：从公开 JD 样本和历史查询证据中沉淀关键词、别名、共现关系，并使用内部 CTS key 离线探测每个词面的召回数量。
-2. 用户本地运行的轻量查询包：接收 JD / RequirementSheet / notes，读取本地 SQLite snapshot，返回可解释的 query bundles。
+2. 用户本地运行的轻量查询包：接收 JD / RequirementSheet / notes，或接收 SeekTalent 已生成的 query term pool，读取本地 SQLite snapshot，返回可解释的 query bundles 和 provider-aware Query Recall Optimization 建议。
 
 用户本地不会持有 CTS key，也不会在运行 SeekTalent 时实时调用 CTS 做关键词探测。CTS 探测只发生在我们内部的 snapshot 构建与刷新流程中；发布给用户的是已经计算好的 concept-surface-recall snapshot。
 
-长期目标不是做通用知识图谱，而是让同一份 JD 在不同时间、不同运行中都能稳定地产生可解释、不过宽、不漏召回的查询词组合。
+长期目标不是做通用知识图谱，而是让同一份 JD 和同一组已生成检索词在不同时间、不同运行中都能稳定地产生可解释、不过宽、不漏召回的查询词组合，并在实际调用 CTS / 猎聘 / Boss 等 provider 前给出可复盘的保留、降权、替换、alias probe、precision companion、score-only 或 fallback 建议。

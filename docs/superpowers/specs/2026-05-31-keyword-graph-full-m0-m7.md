@@ -8,12 +8,19 @@ as historical context and a negative example: its demo-oriented slices, fixed
 fixture behavior, help-only CLI paths, empty responses, and incomplete builder
 flow are not acceptable completion evidence for this spec.
 
+The 2026-06-01 scope update adds SeekTalent Query Recall Optimization as a
+first-version runtime requirement. `build_query_plan` remains supported, but
+the runtime is incomplete unless it can also analyze and optimize existing
+SeekTalent query term pools using provider-aware recall observations from the
+local snapshot.
+
 ## Purpose
 
 Build `seektalent-keyword-graph` into a complete first version of an independent
-Python package and internal snapshot builder that turns public JD evidence into
-a versioned SQLite keyword graph snapshot and lets SeekTalent consume that
-snapshot locally through deterministic query bundle recommendations.
+Python package and internal snapshot builder that turns public JD and historical
+retrieval evidence into a versioned SQLite keyword graph snapshot and lets
+SeekTalent consume that snapshot locally for deterministic query bundle
+recommendations and provider-aware Query Recall Optimization.
 
 Dependency direction is fixed:
 
@@ -22,7 +29,7 @@ SeekTalent -> seektalent-keyword-graph package + SQLite snapshot
 ```
 
 `seektalent-keyword-graph` must not import SeekTalent. Runtime code must not
-import builder or CTS modules.
+import builder, CTS, or live provider modules.
 
 ## Non-Acceptance Contract
 
@@ -69,6 +76,15 @@ The first version does:
   surfaces, warnings, and lineage.
 - Support all query bundle types as real selection behavior: `anchor`,
   `precision`, `alias_probe`, `exploration`, and `fallback`.
+- Open the same snapshot after SeekTalent has already produced
+  `RequirementSheet.initial_query_term_pool` or
+  `RetrievalState.query_term_pool`, then analyze and optimize those query terms
+  before SeekTalent calls CTS, Liepin, Boss, or later providers.
+- Return provider-aware recall observations and graph-backed alternatives for
+  each input query term without doing runtime network I/O.
+- Support Query Recall Optimization actions that SeekTalent can apply to a term
+  pool: keep, downrank, replace, add alias probe, add precision companion,
+  mark score-only, or fallback.
 - Provide SeekTalent-facing contract docs, JSON schemas, examples, failure mode
   documentation, and consumer tests.
 - Build a wheel and prove package/runtime/builder import boundaries.
@@ -78,12 +94,14 @@ The first version does not:
 - Build a UI, server, HTTP API, Docker runtime, Neo4j, PostgreSQL, Redis, Celery,
   or Kubernetes deployment.
 - Require user-side CTS keys.
-- Run user-side CTS probing.
+- Run user-side CTS, Liepin, Boss, or other provider probing.
 - Call real CTS during unattended execution or CI.
 - Store candidate lists, resume text, contact details, or candidate-level
   feedback.
 - Modify the SeekTalent main project.
 - Build company, industry, department, person, or candidate graphs.
+- Replace SeekTalent's requirement extraction, retrieval orchestration, or
+  candidate scoring pipeline.
 
 ## Naming
 
@@ -95,6 +113,10 @@ The first version does not:
 - Internal builder CTS env prefix: `KEYWORD_GRAPH_CTS_`
 - Request schema: `query-plan-request-v1`
 - Response schema: `query-plan-response-v1`
+- Query recall request schema: `query-recall-request-v1`
+- Query recall response schema: `query-recall-response-v1`
+- Recall providers: provider strings such as `cts`, `liepin`, and `boss`;
+  runtime contracts must treat provider as data, not as CTS-only code.
 - Snapshot schema: `snapshot-v1`
 - Selection policy: `policy-v1`
 
@@ -116,7 +138,10 @@ Runtime constraints:
 - does not import `seektalent_keyword_graph.cts`;
 - does not read `KEYWORD_GRAPH_CTS_*`;
 - does not perform network I/O;
-- does not write snapshot or global state.
+- does not write snapshot or global state;
+- reads only provider recall observations already present in the local snapshot;
+- supports provider-aware lookup for `cts`, `liepin`, `boss`, and future
+  provider strings without importing provider clients.
 
 Builder constraints:
 
@@ -124,7 +149,7 @@ Builder constraints:
 - defaults every CTS-capable command to dry-run or fake behavior;
 - can run real CTS only with explicit `--real` plus a separate human gate and
   inside configured probe window;
-- writes only aggregate CTS totals and status into snapshots.
+- writes only aggregate provider totals and status into snapshots.
 
 ## Build Database Contract
 
@@ -141,13 +166,26 @@ The internal SQLite build DB must include these tables and indexes:
 - `concept_surfaces(concept_id, surface_id, confidence, source, status)`
 - `surface_relations(relation_id, from_surface_id, to_surface_id, relation_type, confidence, evidence_type, created_by, status)`
 - `cooccurrence_edges(edge_id, surface_id_a, surface_id_b, window_type, cooccur_count, pmi, jaccard, support, last_computed_at)`
-- `probe_jobs(probe_job_id, surface_id, query_text, query_mode, priority, dedupe_key, scheduled_at, not_before, attempt_count, status, rate_limit_bucket, created_reason, last_error_code)`
-- `cts_recall_observations(observation_id, probe_job_id, surface_id, query_text, query_hash, query_mode, total, latency_ms, status, error_code, observed_at, cts_api_version, builder_run_id)`
+- `probe_jobs(probe_job_id, provider, surface_id, query_text, query_hash, query_mode, priority, dedupe_key, scheduled_at, not_before, attempt_count, status, rate_limit_bucket, created_reason, last_error_code)`
+- `provider_recall_observations(observation_id, provider, probe_job_id, surface_id, query_text, query_hash, query_mode, total, latency_ms, status, error_code, observed_at, recall_bucket, provider_api_version, builder_run_id, evidence_ref)`
 - `review_decisions(decision_id, target_type, target_id, decision, reason, reviewer, reviewed_at)`
 - `build_events(event_id, builder_run_id, event_type, message, payload_json, created_at)`
 
 The build DB must be created by versioned SQL migrations, not ad hoc table
 creation scattered through command handlers.
+
+The canonical recall table is provider-aware. CTS is only the first provider
+populating `provider_recall_observations`; schema, snapshot projection, runtime
+lookup, contracts, and docs must not require a CTS-only table name or CTS-only
+enum. A compatibility view may be added for older builder code during migration,
+but final acceptance must read and validate provider rows through the canonical
+provider-aware contract.
+
+`surfaces.recall_bucket` is only the default serving bucket used by legacy query
+bundle selection and must be derived deterministically from a documented default
+provider policy. Query Recall Optimization must use
+`provider_recall_observations.recall_bucket`, because one surface can be healthy
+for `cts` and too-wide, stale, unknown, or unsupported for another provider.
 
 ## Runtime Snapshot Contract
 
@@ -159,7 +197,7 @@ The runtime SQLite snapshot must include these tables and indexes:
 - `concept_surfaces`
 - `surface_relations`
 - `cooccurrence_edges`
-- `cts_recall_observations`
+- `provider_recall_observations`
 - `selection_policy_meta`
 - optional `fts_surfaces` if FTS5 is available; runtime must work without FTS5
   by falling back to indexed normalized lookup.
@@ -174,8 +212,9 @@ Required `snapshot_meta` keys:
 - `builder_run_id`
 - `build_report_sha256`
 - `manifest_sha256`
-- `cts_probe_window_start`
-- `cts_probe_window_end`
+- `provider_probe_window_start`
+- `provider_probe_window_end`
+- `provider_sources`
 - `created_by_package_version`
 
 Required indexes:
@@ -188,7 +227,8 @@ Required indexes:
 - `surface_relations(to_surface_id, relation_type)`
 - `cooccurrence_edges(surface_id_a)`
 - `cooccurrence_edges(surface_id_b)`
-- `cts_recall_observations(surface_id, observed_at)`
+- `provider_recall_observations(provider, surface_id, observed_at)`
+- `provider_recall_observations(provider, query_hash, query_mode, observed_at)`
 
 Snapshot validation must fail clearly for:
 
@@ -200,8 +240,9 @@ Snapshot validation must fail clearly for:
 - missing required meta key;
 - orphan primary surface;
 - concept/surface link pointing at missing rows;
-- serving surface with no valid recall observation unless explicitly marked
-  stale/unknown by policy;
+- serving surface with no valid provider recall observation for at least one
+  declared `provider_sources` provider unless explicitly marked stale/unknown by
+  policy;
 - forbidden secrets, candidate lists, resume text, or `.env` markers;
 - compressed snapshot above 100MB.
 
@@ -253,6 +294,61 @@ Rejected surfaces must include reason codes such as:
 - `low_confidence_alias`
 - `policy_blocked`
 - `no_active_concept`
+
+## Runtime Query Recall Optimization Contract
+
+`KeywordGraph.analyze_query_recall(request)` must:
+
+- accept `QueryRecallRequest` Pydantic input with `request_id`, `provider`,
+  either `query_text` or `query_terms`, default `query_mode`, and limits for
+  alternatives and precision companions;
+- reject unsupported providers with a typed contract/runtime error before any
+  snapshot mutation or network action;
+- normalize each input query, resolve it to active snapshot surfaces and concepts
+  when possible, and preserve unmatched safe input queries in the response;
+- return the selected provider recall observation for each input query:
+  `provider`, `query_text`, `query_mode`, `total`, `status`, `observed_at`, and
+  `recall_bucket`;
+- distinguish matched-without-observation from no-match: the former has concept
+  or surface provenance and an `unknown_observation` warning, while the latter
+  has no graph match and a fallback/score-only recommendation;
+- expand alternatives from same-concept surfaces and active relations with
+  `relation_type` values such as `alias`, `abbreviation`, `equivalent`,
+  `translation`, `normalized_form`, and `version_variant`;
+- include relation/provenance fields for every candidate:
+  `confidence`, `source_concept_id`, `source_surface_id`, `target_surface_id`,
+  `evidence_type`, and `evidence_ref`;
+- return provider recall observations for every alternative candidate when
+  present, and mark missing observations as unknown without inventing totals;
+- identify zero recall, too-wide recall, too-narrow recall, stale observation,
+  and unknown observation using provider-specific policy thresholds from the
+  snapshot;
+- recommend concrete term-pool actions: `keep`, `downrank`, `replace`,
+  `add_alias_probe`, `add_precision_companion`, `score_only`, or `fallback`;
+- produce deterministic response ordering and lineage for the same input and
+  snapshot.
+
+`KeywordGraph.optimize_query_terms(request)` must:
+
+- accept the same `QueryRecallRequest` or a validated dict;
+- return `QueryRecallResponse` plus an ordered optimized term pool that
+  SeekTalent can use to enhance or re-rank
+  `RequirementSheet.initial_query_term_pool` or
+  `RetrievalState.query_term_pool`;
+- never remove the original term silently: replacements and downranking must be
+  explicit actions with reasons and provider recall evidence;
+- add alias probes only when graph relation confidence and provider recall
+  evidence make the alternative safer than the original;
+- add precision companions only when a too-wide original has a strong
+  co-occurrence surface with healthier provider recall;
+- mark `score_only` or `fallback` when graph evidence is absent or unsafe.
+
+Runtime Query Recall Optimization must not:
+
+- call CTS, Liepin, Boss, or any live provider;
+- import builder, CTS, or provider client modules;
+- read `KEYWORD_GRAPH_CTS_*` or any provider credential environment variable;
+- hard-code CTS-only schema assumptions.
 
 ## Builder CLI Contract
 
@@ -327,7 +423,7 @@ Probe runner must:
   `kg_snapshot_id`, schema versions, build time, source corpus version,
   builder run id, and policy version;
 - build report JSON with input counts, extracted mention counts, blocked counts,
-  relation counts, CTS observation status counts, replay summary, privacy scan
+  relation counts, provider observation status counts, replay summary, privacy scan
   result, and validation status;
 - release checklist and rollback instructions.
 
@@ -339,7 +435,12 @@ The repository must include:
 - `contracts/query-plan/response.example.json`
 - `contracts/query-plan/query-plan-request.schema.json`
 - `contracts/query-plan/query-plan-response.schema.json`
+- `contracts/query-recall/request.example.json`
+- `contracts/query-recall/response.example.json`
+- `contracts/query-recall/query-recall-request.schema.json`
+- `contracts/query-recall/query-recall-response.schema.json`
 - `docs/seektalent-integration.md`
+- `docs/query-recall-optimization.md`
 - `tests/contract/test_consumer_contract.py`
 
 Integration docs must cover:
@@ -349,7 +450,11 @@ Integration docs must cover:
 - `SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_ID`
 - `SEEKTALENT_KEYWORD_GRAPH_FAIL_OPEN`
 - `SEEKTALENT_KEYWORD_GRAPH_MAX_BUNDLES`
+- `SEEKTALENT_KEYWORD_GRAPH_DEFAULT_PROVIDER`
+- `SEEKTALENT_KEYWORD_GRAPH_MAX_ALTERNATIVES`
 - `keyword_graph_unavailable` failure mode;
+- where `analyze_query_recall` and `optimize_query_terms` run in the SeekTalent
+  flow between query term pool generation and provider retrieval;
 - no user-side CTS key;
 - no SeekTalent main-project modification in this repo.
 
@@ -379,8 +484,15 @@ Acceptance tests must cover:
 - runtime snapshot negative cases;
 - query bundle behavior for anchor, precision, alias_probe, exploration, and
   fallback;
+- Query Recall Optimization contract behavior for single query lookup, multiple
+  query-term pool optimization, alias/equivalent/normalized expansion,
+  unsupported provider, query no match, matched query with no observation, zero
+  recall, too-wide recall, stale observation, unknown observation, and provider
+  distinction across `cts`, `liepin`, and `boss` fixture rows;
 - full integration flow: JD fixture -> build DB -> snapshot -> `KeywordGraph.open`
   -> `build_query_plan`;
+- full integration flow: fixture build DB -> provider-aware snapshot ->
+  `KeywordGraph.open` -> query term pool input -> `optimize_query_terms`;
 - all CLI commands executing local fixture flow;
 - runtime/builder/CTS/SeekTalent import boundaries;
 - old-name scan;
@@ -412,6 +524,8 @@ Acceptance:
   typed errors.
 - Lookup APIs return concepts, surfaces, relations, recall summaries, and
   alternatives from snapshot data.
+- Query Recall Optimization contracts validate provider-aware examples and
+  generated JSON schemas.
 - Runtime import and environment tests prove no builder/CTS import and no CTS env
   read.
 
@@ -460,22 +574,31 @@ Acceptance:
   time is inside the configured window; gated success is covered only with mocked
   HTTP.
 - Runtime package does not import CTS code and does not read CTS env.
+- Probe persistence writes provider-aware rows with `provider='cts'`; runtime
+  does not depend on a CTS-only recall table.
 
-### M5: Snapshot Build and Query Bundles
+### M5: Snapshot Build, Query Bundles, and Query Recall Optimization
 
 Acceptance:
 
 - Snapshot builder projects build DB contents into all required runtime tables and
-  indexes.
+  indexes, including `provider_recall_observations`.
 - Snapshot manifest/checksum/build report are generated.
 - Snapshot validation rejects schema, referential, privacy, checksum, and size
   failures.
 - Runtime query planner emits real anchor, precision, alias_probe, exploration,
   and fallback bundles when fixture evidence calls for each type.
+- Runtime `analyze_query_recall` and `optimize_query_terms` emit provider-aware
+  input observations, graph alternatives, relation provenance, recall warnings,
+  and term-pool actions for fixture evidence.
+- Runtime query recall behavior distinguishes unsupported provider, no match,
+  matched-without-observation, zero recall, too-wide recall, stale observation,
+  unknown observation, and multiple provider rows.
 - Response includes concept sheet, reason codes, rejected surfaces, warnings, and
   lineage with input hash and policy version.
 - Replay evaluation report is generated and includes bundle counts, warning
-  counts, rejected reason counts, and stability checks.
+  counts, rejected reason counts, query recall action counts, provider
+  observation status counts, and stability checks.
 - Integration flow from JD fixture to runtime response passes.
 
 ### M6: SeekTalent Integration Contract
@@ -486,6 +609,9 @@ Acceptance:
 - Consumer tests demonstrate how SeekTalent would load config, call the package,
   and fail open with `keyword_graph_unavailable`.
 - Docs define `SEEKTALENT_KEYWORD_GRAPH_*` env vars and no-CTS-user boundary.
+- Docs show where Query Recall Optimization fits between SeekTalent query term
+  pool generation and provider retrieval, with example request/response for
+  `optimize_query_terms`.
 - No SeekTalent main-project files are modified.
 
 ### M7: Release Hardening
@@ -499,7 +625,8 @@ Acceptance:
 - Import-boundary tests cover runtime, domain, builder, CTS, and SeekTalent.
 - Release checklist, rollback instructions, and readiness report exist.
 - `docs/readiness-report.md` maps every M0-M7 acceptance item to fresh test or
-  command evidence, lists incomplete items explicitly, and includes current HEAD.
+  command evidence, separately lists Query Recall Optimization status, lists
+  incomplete items explicitly, and includes current HEAD.
 
 ## Completion Standard
 
@@ -514,6 +641,7 @@ uv run pytest tests/architecture/test_import_boundaries.py -q
 rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_intelligence" \
   README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts docs
 uv run pytest tests/integration/test_cli_end_to_end.py -q
+uv run pytest tests/integration/test_query_recall_optimization.py -q
 keyword-graph validate-snapshot --snapshot <fixture-built-snapshot> --manifest <fixture-manifest>
 ```
 
