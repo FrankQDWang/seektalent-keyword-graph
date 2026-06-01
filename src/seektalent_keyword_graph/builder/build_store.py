@@ -396,6 +396,43 @@ class BuildStore:
             ),
         )
 
+    def insert_probe_job_if_absent(
+        self,
+        *,
+        probe_job_id: str,
+        surface_id: str,
+        query_text: str,
+        query_mode: str,
+        priority: int,
+        dedupe_key: str,
+        scheduled_at: str,
+        not_before: str,
+        attempt_count: int,
+        status: str,
+        rate_limit_bucket: str,
+        created_reason: str,
+        last_error_code: str | None,
+    ) -> bool:
+        try:
+            self.insert_probe_job(
+                probe_job_id=probe_job_id,
+                surface_id=surface_id,
+                query_text=query_text,
+                query_mode=query_mode,
+                priority=priority,
+                dedupe_key=dedupe_key,
+                scheduled_at=scheduled_at,
+                not_before=not_before,
+                attempt_count=attempt_count,
+                status=status,
+                rate_limit_bucket=rate_limit_bucket,
+                created_reason=created_reason,
+                last_error_code=last_error_code,
+            )
+        except sqlite3.IntegrityError:
+            return False
+        return True
+
     def insert_cts_recall_observation(
         self,
         *,
@@ -532,6 +569,86 @@ class BuildStore:
             "select * from probe_jobs where surface_id = ? order by priority, probe_job_id",
             (surface_id,),
         )
+
+    def list_active_probe_surfaces(self) -> list[dict[str, object]]:
+        return self._fetch_all(
+            "select * from surfaces where serving_status = ? and query_safe = ? "
+            "order by specificity_score desc, surface_id",
+            ("active", 1),
+        )
+
+    def list_due_probe_jobs(self, due_at: str) -> list[dict[str, object]]:
+        return self._fetch_all(
+            "select * from probe_jobs where status in (?, ?) and not_before <= ? "
+            "order by priority, scheduled_at, probe_job_id",
+            ("scheduled", "retry_scheduled", due_at),
+        )
+
+    def find_observation_since(
+        self,
+        *,
+        surface_id: str,
+        query_hash: str,
+        query_mode: str,
+        observed_after: str,
+    ) -> dict[str, object] | None:
+        return self._fetch_one(
+            "select * from cts_recall_observations "
+            "where surface_id = ? and query_hash = ? and query_mode = ? and observed_at >= ? "
+            "order by observed_at desc, observation_id limit 1",
+            (surface_id, query_hash, query_mode, observed_after),
+        )
+
+    def update_probe_job(
+        self,
+        *,
+        probe_job_id: str,
+        status: str,
+        attempt_count: int,
+        not_before: str,
+        last_error_code: str | None,
+    ) -> None:
+        self._execute(
+            """
+            update probe_jobs
+            set status = ?, attempt_count = ?, not_before = ?, last_error_code = ?
+            where probe_job_id = ?
+            """,
+            (status, attempt_count, not_before, last_error_code, probe_job_id),
+        )
+
+    def pause_pending_probe_jobs(
+        self,
+        *,
+        paused_status: str,
+        error_code: str | None,
+        exclude_probe_job_id: str,
+    ) -> None:
+        self._execute(
+            """
+            update probe_jobs
+            set status = ?, last_error_code = ?
+            where status in (?, ?) and probe_job_id != ?
+            """,
+            (
+                paused_status,
+                error_code,
+                "scheduled",
+                "retry_scheduled",
+                exclude_probe_job_id,
+            ),
+        )
+
+    def latest_successful_observation_total(self, surface_id: str) -> int | None:
+        row = self._fetch_one(
+            "select total from cts_recall_observations "
+            "where surface_id = ? and status = ? and total is not null "
+            "order by observed_at desc, observation_id limit 1",
+            (surface_id, "ok"),
+        )
+        if row is None:
+            return None
+        return int(row["total"])
 
     def list_observations(self, surface_id: str) -> list[dict[str, object]]:
         return self._fetch_all(
