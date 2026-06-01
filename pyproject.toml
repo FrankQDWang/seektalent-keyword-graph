@@ -18,6 +18,7 @@ builder = [
 ]
 dev = [
     "build",
+    "hatchling",
     "pytest",
     "ruff",
 ]

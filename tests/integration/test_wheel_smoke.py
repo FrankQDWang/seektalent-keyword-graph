@@ -23,17 +23,23 @@ RUNTIME_DEPENDENCY_PATHS = {
 def test_built_wheel_installs_and_opens_fixture_snapshot(tmp_path: Path) -> None:
     fixture = run_fixture_flow(tmp_path / "fixture")
     dist_dir = tmp_path / "dist"
+    subprocess_env = os.environ.copy()
+    subprocess_env["PIP_NO_INDEX"] = "1"
+    subprocess_env["UV_CACHE_DIR"] = str(tmp_path / "uv-cache")
+    subprocess_env["UV_NO_INDEX"] = "1"
     subprocess.run(
         [
             sys.executable,
             "-m",
             "build",
             "--wheel",
+            "--no-isolation",
             "--outdir",
             str(dist_dir),
         ],
         check=True,
         cwd=Path(__file__).resolve().parents[2],
+        env=subprocess_env,
     )
     wheels = sorted(dist_dir.glob("seektalent_keyword_graph-*.whl"))
     assert len(wheels) == 1
@@ -41,8 +47,6 @@ def test_built_wheel_installs_and_opens_fixture_snapshot(tmp_path: Path) -> None
     venv_dir = tmp_path / "venv"
     uv = shutil.which("uv")
     assert uv is not None
-    env = os.environ.copy()
-    env["UV_CACHE_DIR"] = str(tmp_path / "uv-cache")
     subprocess.run(
         [
             uv,
@@ -53,7 +57,7 @@ def test_built_wheel_installs_and_opens_fixture_snapshot(tmp_path: Path) -> None
         ],
         check=True,
         cwd=tmp_path,
-        env=env,
+        env=subprocess_env,
     )
     python = venv_dir / "bin" / "python"
     venv_site_packages = _venv_site_packages(python)
@@ -62,7 +66,7 @@ def test_built_wheel_installs_and_opens_fixture_snapshot(tmp_path: Path) -> None
         [uv, "pip", "install", "--python", str(python), "--no-deps", str(wheels[0])],
         check=True,
         cwd=tmp_path,
-        env=env,
+        env=subprocess_env,
     )
 
     smoke_env = os.environ.copy()
@@ -104,10 +108,7 @@ def _copy_runtime_dependencies(target_site_packages: Path) -> None:
     for distribution_name, package_paths in RUNTIME_DEPENDENCY_PATHS.items():
         distribution = metadata.distribution(distribution_name)
         source_site_packages = Path(distribution.locate_file(""))
-        shutil.copytree(
-            distribution._path,
-            target_site_packages / distribution._path.name,
-        )
+        _copy_distribution_metadata(distribution, target_site_packages)
         for package_path in package_paths:
             source = source_site_packages / package_path
             destination = target_site_packages / package_path
@@ -115,6 +116,24 @@ def _copy_runtime_dependencies(target_site_packages: Path) -> None:
                 shutil.copytree(source, destination)
             else:
                 shutil.copy2(source, destination)
+
+
+def _copy_distribution_metadata(
+    distribution: metadata.Distribution, target_site_packages: Path
+) -> None:
+    files = distribution.files
+    assert files is not None
+    dist_info_dirs = {
+        file.parts[0]
+        for file in files
+        if file.parts and file.parts[0].endswith(".dist-info")
+    }
+    assert len(dist_info_dirs) == 1
+    dist_info_dir = dist_info_dirs.pop()
+    shutil.copytree(
+        Path(distribution.locate_file(dist_info_dir)),
+        target_site_packages / dist_info_dir,
+    )
 
 
 _SMOKE_SCRIPT = r"""
