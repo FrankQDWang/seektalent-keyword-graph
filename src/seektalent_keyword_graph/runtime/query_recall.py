@@ -351,6 +351,26 @@ class QueryRecallOptimizer:
                     )
                 continue
             if bucket in {"zero", "too_narrow", "stale"} and candidate is not None:
+                if (
+                    bucket in {"zero", "too_narrow"}
+                    and matched.input_term.source == "query_text"
+                    and candidate.relation_type in {"alias", "abbreviation"}
+                ):
+                    recommendations.append(
+                        _recommendation(
+                            action="add_alias_probe",
+                            query_text=input_text,
+                            recommended_query_text=candidate.query_text,
+                            reason_code=_reason_code(bucket),
+                            reason=(
+                                "Graph alias has healthier provider recall and "
+                                "should be probed alongside the input term."
+                            ),
+                            provider=request.provider,
+                            evidence_ids=evidence_ids,
+                        )
+                    )
+                    continue
                 recommendations.append(
                     _recommendation(
                         action="replace",

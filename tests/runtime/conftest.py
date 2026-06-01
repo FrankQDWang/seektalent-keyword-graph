@@ -52,6 +52,7 @@ def _make_snapshot(path: Path) -> None:
             ("surface:node.js", "Node.js", "healthy"),
             ("surface:vue", "Vue", "zero"),
             ("surface:vue-3", "Vue 3", "healthy"),
+            ("surface:aiops", "AIOps", "zero"),
             ("surface:llmops", "LLMOps", "unknown"),
             ("surface:vector-search", "Vector Search", "healthy"),
             ("surface:aaa-low-quality", "Aaa Low Quality", "healthy"),
@@ -202,6 +203,7 @@ def _make_snapshot(path: Path) -> None:
             ("concept:javascript", "surface:js", 0.88),
             ("concept:node.js", "surface:nodejs", 0.87),
             ("concept:vue", "surface:vue-3", 0.86),
+            ("concept:llmops", "surface:aiops", 0.84),
         ]:
             conn.execute(
                 """
@@ -245,6 +247,12 @@ def _make_snapshot(path: Path) -> None:
                 "surface:vue",
                 "version_variant",
             ),
+            (
+                "relation:aiops-alias",
+                "surface:aiops",
+                "surface:llmops",
+                "alias",
+            ),
         ]:
             conn.execute(
                 """
@@ -283,6 +291,7 @@ def _make_snapshot(path: Path) -> None:
             ("surface:node.js", 30, "ok", "2026-05-01T00:00:00Z"),
             ("surface:vue", 0, "ok", "2026-05-01T00:00:00Z"),
             ("surface:vue-3", 52, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:aiops", 0, "ok", "2026-05-01T00:00:00Z"),
             ("surface:llmops", None, "unknown", "2026-05-01T00:00:00Z"),
             ("surface:vector-search", 35, "ok", "2026-05-01T00:00:00Z"),
             ("surface:aaa-low-quality", 28, "ok", "2026-05-01T00:00:00Z"),
@@ -292,6 +301,8 @@ def _make_snapshot(path: Path) -> None:
             "surface:python": (7, "ok", "too_narrow"),
             "surface:kubernetes": (40, "ok", "healthy"),
             "surface:react": (12, "ok", "healthy"),
+            "surface:aiops": (0, "ok", "zero"),
+            "surface:llmops": (36, "ok", "healthy"),
         }
         boss_overrides = {
             "surface:python": (120, "ok", "healthy"),
@@ -307,6 +318,7 @@ def _make_snapshot(path: Path) -> None:
             "surface:js": "zero",
             "surface:nodejs": "zero",
             "surface:vue": "zero",
+            "surface:aiops": "zero",
             "surface:llmops": "unknown",
         }
         for provider in ("boss", "cts", "liepin"):

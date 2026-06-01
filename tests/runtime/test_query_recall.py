@@ -190,6 +190,36 @@ def test_zero_recall_without_safer_candidate_does_not_emit_empty_alias_probe(
     assert response.optimized_terms[0].action == "score_only"
 
 
+def test_zero_recall_with_safer_alias_emits_concrete_alias_probe(
+    snapshot_store: SQLiteSnapshotStore,
+) -> None:
+    response = KeywordGraph(snapshot_store).analyze_query_recall(
+        QueryRecallRequest(
+            request_id="req-alias-probe",
+            provider="liepin",
+            query_text="AIOps",
+            max_alternatives=10,
+        )
+    )
+
+    assert response.recommendations[0].query_text == "AIOps"
+    assert response.recommendations[0].action == "add_alias_probe"
+    assert response.recommendations[0].recommended_query_text == "LLMOps"
+    assert response.recommendations[0].evidence_observation_ids == [
+        response.input_observations[0].observation_id,
+        next(
+            alternative.observation.observation_id
+            for alternative in response.alternatives
+            if alternative.query_text == "LLMOps"
+            and alternative.observation is not None
+        ),
+    ]
+    assert [
+        (term.source_query_text, term.query_text, term.action, term.recall_bucket)
+        for term in response.optimized_terms
+    ] == [("AIOps", "LLMOps", "add_alias_probe", "healthy")]
+
+
 def test_recommendations_use_full_candidates_when_response_alternatives_are_limited(
     snapshot_store: SQLiteSnapshotStore,
 ) -> None:
