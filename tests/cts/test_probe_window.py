@@ -74,9 +74,7 @@ def test_real_probe_with_valid_gate_file_is_allowed_inside_window(
     tmp_path: Path,
 ) -> None:
     gate_file = tmp_path / "gate.txt"
-    gate_file.write_text(
-        f"{REAL_CTS_GATE_TOKEN}\nextra lines ignored\n", encoding="utf-8"
-    )
+    gate_file.write_text(f"{REAL_CTS_GATE_TOKEN}\n", encoding="utf-8")
 
     assert validate_real_probe_gate(gate_file) == REAL_CTS_GATE_TOKEN
     ensure_real_probe_allowed(

@@ -30,6 +30,9 @@ _FAKE_CTS_ERRORS: dict[str, tuple[str, str, bool]] = {
     "invalid_response": ("invalid_response", "invalid_response", False),
 }
 _VERSION_SUFFIX = re.compile(r"^(?P<base>.+?)\s+\d+(?:\.\d+)*$")
+DEFAULT_BUILDER_RUN_ID = "local-cli-run"
+DEFAULT_SNAPSHOT_ID = "local-cli-snapshot"
+DEFAULT_SOURCE_CORPUS_VERSION = "local-cli-corpus"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,8 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     import_jds.add_argument("input_jsonl", metavar="INPUT_JSONL")
     import_jds.add_argument("--build-db", required=True)
-    import_jds.add_argument("--builder-run-id", required=True)
-    import_jds.add_argument("--corpus-version")
+    import_jds.add_argument("--builder-run-id", default=DEFAULT_BUILDER_RUN_ID)
+    import_jds.add_argument("--corpus-version", default=DEFAULT_SOURCE_CORPUS_VERSION)
     import_jds.set_defaults(handler=_handle_import_jds)
 
     extract = subparsers.add_parser(
@@ -83,10 +86,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_build_db_and_run_id(snapshot)
     snapshot.add_argument("--output-dir")
-    snapshot.add_argument("--kg-snapshot-id", required=True)
-    snapshot.add_argument("--source-corpus-version", required=True)
-    snapshot.add_argument("--provider-probe-window-start", required=True)
-    snapshot.add_argument("--provider-probe-window-end", required=True)
+    snapshot.add_argument("--kg-snapshot-id", default=DEFAULT_SNAPSHOT_ID)
+    snapshot.add_argument("--source-corpus-version")
+    snapshot.add_argument("--provider-probe-window-start")
+    snapshot.add_argument("--provider-probe-window-end")
     snapshot.add_argument("--built-at")
     snapshot.add_argument("--snapshot")
     snapshot.add_argument("--manifest")
@@ -120,7 +123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _add_build_db_and_run_id(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--build-db", required=True)
-    parser.add_argument("--builder-run-id", required=True)
+    parser.add_argument("--builder-run-id", default=DEFAULT_BUILDER_RUN_ID)
 
 
 def _handle_import_jds(args: argparse.Namespace) -> int:
@@ -260,14 +263,22 @@ def _handle_build_snapshot(args: argparse.Namespace) -> int:
     BuildSnapshotConfig = _load_attr(
         "seektalent_keyword_graph.builder.build_snapshot", "BuildSnapshotConfig"
     )
+    built_at = args.built_at or _utc_now()
+    window_start, window_end = _provider_probe_window_defaults(
+        Path(args.build_db),
+        built_at=built_at,
+        explicit_start=args.provider_probe_window_start,
+        explicit_end=args.provider_probe_window_end,
+    )
 
     config = BuildSnapshotConfig(
         kg_snapshot_id=args.kg_snapshot_id,
-        built_at=args.built_at or _utc_now(),
-        source_corpus_version=args.source_corpus_version,
+        built_at=built_at,
+        source_corpus_version=args.source_corpus_version
+        or _latest_source_corpus_version(Path(args.build_db)),
         builder_run_id=args.builder_run_id,
-        provider_probe_window_start=args.provider_probe_window_start,
-        provider_probe_window_end=args.provider_probe_window_end,
+        provider_probe_window_start=window_start,
+        provider_probe_window_end=window_end,
     )
     paths = _build_snapshot_artifacts(args, config)
     _print_json(
@@ -285,11 +296,16 @@ def _handle_validate_snapshot(args: argparse.Namespace) -> int:
     validate_release_artifacts = _load_attr(
         "seektalent_keyword_graph.release_validation", "validate_release_artifacts"
     )
+    compressed_snapshot = args.compressed_snapshot
+    if compressed_snapshot is None:
+        sibling = Path(f"{args.snapshot}.gz")
+        if sibling.exists():
+            compressed_snapshot = str(sibling)
 
     result = validate_release_artifacts(
         args.snapshot,
         args.manifest,
-        compressed_snapshot_path=args.compressed_snapshot,
+        compressed_snapshot_path=compressed_snapshot,
     )
     errors = [_object_dict(error) for error in result.errors]
     payload = {
@@ -513,6 +529,59 @@ def _snapshot_output_dir(args: argparse.Namespace) -> Path:
             return Path(alias).parent
     raise ValueError(
         "build-snapshot requires --output-dir unless an artifact alias path is provided"
+    )
+
+
+def _latest_source_corpus_version(build_db: Path) -> str:
+    connection = sqlite3.connect(build_db)
+    try:
+        row = connection.execute(
+            """
+            select input_corpus_version
+            from builder_runs
+            where input_corpus_version is not null
+              and trim(input_corpus_version) != ''
+            order by started_at desc, builder_run_id desc
+            limit 1
+            """
+        ).fetchone()
+    except sqlite3.Error:
+        return DEFAULT_SOURCE_CORPUS_VERSION
+    finally:
+        connection.close()
+    if row is None:
+        return DEFAULT_SOURCE_CORPUS_VERSION
+    return str(row[0])
+
+
+def _provider_probe_window_defaults(
+    build_db: Path,
+    *,
+    built_at: str,
+    explicit_start: str | None,
+    explicit_end: str | None,
+) -> tuple[str, str]:
+    observed_start: str | None = None
+    observed_end: str | None = None
+    connection = sqlite3.connect(build_db)
+    try:
+        row = connection.execute(
+            """
+            select min(observed_at), max(observed_at)
+            from provider_recall_observations
+            """
+        ).fetchone()
+    except sqlite3.Error:
+        row = None
+    finally:
+        connection.close()
+    if row is not None:
+        observed_start = row[0]
+        observed_end = row[1]
+
+    return (
+        explicit_start or observed_start or built_at,
+        explicit_end or observed_end or built_at,
     )
 
 

@@ -42,15 +42,18 @@ def validate_real_probe_gate(gate_file: str | Path | None) -> str:
 
     path = Path(gate_file)
     try:
-        first_line = path.read_text(encoding="utf-8").splitlines()[0]
+        content = path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
         raise RealProbeGateError("real CTS probe gate file does not exist") from exc
-    except IndexError as exc:
-        raise RealProbeGateError("invalid CTS real-mode gate token") from exc
 
-    if first_line != REAL_CTS_GATE_TOKEN:
+    allowed_content = {
+        REAL_CTS_GATE_TOKEN,
+        f"{REAL_CTS_GATE_TOKEN}\n",
+        f"{REAL_CTS_GATE_TOKEN}\r\n",
+    }
+    if content not in allowed_content:
         raise RealProbeGateError("invalid CTS real-mode gate token")
-    return first_line
+    return REAL_CTS_GATE_TOKEN
 
 
 def ensure_real_probe_allowed(
