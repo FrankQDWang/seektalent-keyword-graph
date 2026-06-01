@@ -62,7 +62,10 @@ def runtime_import_boundary_paths() -> list[Path]:
     return [
         path
         for path in production_python_files()
-        if path.name in runtime_surface_files
+        if (
+            path.relative_to(SRC_ROOT).parent == Path(".")
+            and path.name in runtime_surface_files
+        )
         or "runtime" in path.relative_to(SRC_ROOT).parts
     ]
 
