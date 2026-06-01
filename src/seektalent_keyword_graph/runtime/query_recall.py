@@ -98,11 +98,16 @@ class QueryRecallOptimizer:
             else:
                 matched_terms.append(matched)
 
-        alternatives = self._alternatives(request, matched_terms)
+        all_alternatives = self._alternatives(request, matched_terms)
         recommendations = self._recommendations(
-            request, matched_terms, no_match_terms, alternatives
+            request, matched_terms, no_match_terms, all_alternatives
         )
-        optimized_terms = _optimized_terms(recommendations, alternatives, matched_terms)
+        response_alternatives = _response_alternatives(
+            all_alternatives, recommendations, matched_terms, request.max_alternatives
+        )
+        optimized_terms = _optimized_terms(
+            recommendations, all_alternatives, matched_terms
+        )
 
         return QueryRecallResponse(
             schema_version="query-recall-response-v1",
@@ -115,7 +120,7 @@ class QueryRecallOptimizer:
                 for matched in matched_terms
                 if matched.observation is not None
             ],
-            alternatives=alternatives,
+            alternatives=response_alternatives,
             recommendations=recommendations,
             warnings=_warnings(matched_terms, no_match_terms, recommendations, request),
             optimized_terms=optimized_terms,
@@ -175,7 +180,11 @@ class QueryRecallOptimizer:
                 )
                 if alternative is not None:
                     alternatives_by_key.setdefault(
-                        (alternative.target_surface_id, alternative.relation_type),
+                        (
+                            alternative.source_surface_id,
+                            alternative.target_surface_id,
+                            alternative.relation_type,
+                        ),
                         alternative,
                     )
 
@@ -183,7 +192,7 @@ class QueryRecallOptimizer:
                 target_surface_id = str(concept_link["surface_id"])
                 if target_surface_id == source_surface_id:
                     continue
-                key = (target_surface_id, "equivalent")
+                key = (source_surface_id, target_surface_id, "equivalent")
                 if key in alternatives_by_key:
                     continue
                 alternative = self._alternative_from_surface(
@@ -220,6 +229,7 @@ class QueryRecallOptimizer:
                     if alternative is not None:
                         alternatives_by_key.setdefault(
                             (
+                                alternative.source_surface_id,
                                 alternative.target_surface_id,
                                 alternative.relation_type,
                             ),
@@ -229,7 +239,7 @@ class QueryRecallOptimizer:
         return sorted(
             alternatives_by_key.values(),
             key=self._alternative_sort_key,
-        )[: request.max_alternatives]
+        )
 
     def _alternative_from_surface(
         self,
@@ -353,20 +363,6 @@ class QueryRecallOptimizer:
                     )
                 )
                 continue
-            if bucket in {"zero", "too_narrow"} and candidate is None:
-                recommendations.append(
-                    _recommendation(
-                        action="add_alias_probe",
-                        query_text=input_text,
-                        recommended_query_text=None,
-                        reason_code=_reason_code(bucket),
-                        reason="Input term needs an alias probe before anchoring.",
-                        provider=request.provider,
-                        evidence_ids=evidence_ids,
-                    )
-                )
-                continue
-
             recommendations.append(
                 _recommendation(
                     action="score_only",
@@ -497,9 +493,26 @@ def _optimized_terms(
     }
     matched_by_text = {matched.input_term.text: matched for matched in matched_terms}
     optimized: list[OptimizedQueryTerm] = []
-    for rank, recommendation in enumerate(recommendations, start=1):
-        query_text = recommendation.recommended_query_text or recommendation.query_text
+    for recommendation in recommendations:
         matched = matched_by_text.get(recommendation.query_text)
+        if recommendation.action == "add_precision_companion" and matched is not None:
+            optimized.append(
+                OptimizedQueryTerm(
+                    query_text=recommendation.query_text,
+                    query_mode=(
+                        matched.observation.query_mode
+                        if matched.observation is not None
+                        else "keyword"
+                    ),
+                    action="keep",
+                    rank=len(optimized) + 1,
+                    source_query_text=recommendation.query_text,
+                    provider=recommendation.provider,
+                    recall_bucket=matched.bucket,
+                    reason="Original term retained while adding precision companion.",
+                )
+            )
+        query_text = recommendation.recommended_query_text or recommendation.query_text
         source_surface_id = (
             "" if matched is None else str(matched.surface["surface_id"])
         )
@@ -517,7 +530,7 @@ def _optimized_terms(
                 query_text=query_text,
                 query_mode=query_mode,
                 action=recommendation.action,
-                rank=rank,
+                rank=len(optimized) + 1,
                 source_query_text=recommendation.query_text,
                 provider=recommendation.provider,
                 recall_bucket=bucket,
@@ -525,6 +538,61 @@ def _optimized_terms(
             )
         )
     return optimized
+
+
+def _response_alternatives(
+    alternatives: list[QueryRecallAlternative],
+    recommendations: list[QueryRecallRecommendation],
+    matched_terms: list[_MatchedTerm],
+    max_alternatives: int,
+) -> list[QueryRecallAlternative]:
+    matched_by_text = {matched.input_term.text: matched for matched in matched_terms}
+    alternatives_by_key: dict[tuple[str, str], QueryRecallAlternative] = {}
+    for alternative in alternatives:
+        alternatives_by_key.setdefault(
+            (alternative.source_surface_id, alternative.query_text),
+            alternative,
+        )
+    required: list[QueryRecallAlternative] = []
+    seen: set[tuple[str, str, str]] = set()
+    for recommendation in recommendations:
+        if recommendation.recommended_query_text is None:
+            continue
+        matched = matched_by_text.get(recommendation.query_text)
+        if matched is None:
+            continue
+        key = (
+            str(matched.surface["surface_id"]),
+            recommendation.recommended_query_text,
+        )
+        alternative = alternatives_by_key.get(key)
+        if alternative is None:
+            continue
+        identity = (
+            alternative.source_surface_id,
+            alternative.query_text,
+            alternative.relation_type,
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        required.append(alternative)
+
+    response = list(required)
+    limit = max(max_alternatives, len(required))
+    for alternative in alternatives:
+        identity = (
+            alternative.source_surface_id,
+            alternative.query_text,
+            alternative.relation_type,
+        )
+        if identity in seen:
+            continue
+        if len(response) >= limit:
+            break
+        seen.add(identity)
+        response.append(alternative)
+    return response
 
 
 def _warnings(

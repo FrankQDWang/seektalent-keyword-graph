@@ -33,7 +33,7 @@ def _make_snapshot(path: Path) -> None:
         )
         conn.execute(
             "insert or replace into snapshot_meta(key, value) values (?, ?)",
-            ("provider_sources", '["cts", "liepin"]'),
+            ("provider_sources", '["boss", "cts", "liepin"]'),
         )
         for surface_id, text, bucket in [
             ("surface:python", "Python", "healthy"),
@@ -46,6 +46,12 @@ def _make_snapshot(path: Path) -> None:
             ("surface:apache-kafka", "Apache Kafka", "healthy"),
             ("surface:rails", "Rails", "zero"),
             ("surface:ruby-on-rails", "Ruby on Rails", "healthy"),
+            ("surface:js", "JS", "zero"),
+            ("surface:javascript", "JavaScript", "healthy"),
+            ("surface:nodejs", "NodeJS", "zero"),
+            ("surface:node.js", "Node.js", "healthy"),
+            ("surface:vue", "Vue", "zero"),
+            ("surface:vue-3", "Vue 3", "healthy"),
             ("surface:llmops", "LLMOps", "unknown"),
             ("surface:vector-search", "Vector Search", "healthy"),
             ("surface:aaa-low-quality", "Aaa Low Quality", "healthy"),
@@ -107,6 +113,15 @@ def _make_snapshot(path: Path) -> None:
                 "surface:ruby-on-rails",
                 0.92,
             ),
+            (
+                "concept:javascript",
+                "JavaScript",
+                "language",
+                "surface:javascript",
+                0.94,
+            ),
+            ("concept:node.js", "Node.js", "framework", "surface:node.js", 0.91),
+            ("concept:vue", "Vue", "framework", "surface:vue", 0.9),
             ("concept:llmops", "LLMOps", "method", "surface:llmops", 0.76),
             (
                 "concept:vector-search",
@@ -183,19 +198,62 @@ def _make_snapshot(path: Path) -> None:
             values ('concept:kafka', 'surface:apache-kafka', 0.9, 'fixture', 'active')
             """
         )
-        for relation_id, from_id, to_id in [
-            ("relation:react-alias", "surface:react", "surface:react-js"),
-            ("relation:kafka-alias", "surface:kafka", "surface:apache-kafka"),
-            ("relation:rails-reverse-alias", "surface:ruby-on-rails", "surface:rails"),
+        for concept_id, surface_id, confidence in [
+            ("concept:javascript", "surface:js", 0.88),
+            ("concept:node.js", "surface:nodejs", 0.87),
+            ("concept:vue", "surface:vue-3", 0.86),
+        ]:
+            conn.execute(
+                """
+                insert into concept_surfaces(
+                  concept_id, surface_id, confidence, source, status
+                )
+                values (?, ?, ?, 'fixture', 'active')
+                """,
+                (concept_id, surface_id, confidence),
+            )
+        for relation_id, from_id, to_id, relation_type in [
+            ("relation:react-alias", "surface:react", "surface:react-js", "alias"),
+            ("relation:kafka-alias", "surface:kafka", "surface:apache-kafka", "alias"),
+            (
+                "relation:rails-reverse-alias",
+                "surface:ruby-on-rails",
+                "surface:rails",
+                "alias",
+            ),
+            (
+                "relation:rails-equivalent",
+                "surface:rails",
+                "surface:ruby-on-rails",
+                "equivalent",
+            ),
+            (
+                "relation:js-abbreviation",
+                "surface:js",
+                "surface:javascript",
+                "abbreviation",
+            ),
+            (
+                "relation:node-normalized",
+                "surface:nodejs",
+                "surface:node.js",
+                "normalized_form",
+            ),
+            (
+                "relation:vue-version",
+                "surface:vue-3",
+                "surface:vue",
+                "version_variant",
+            ),
         ]:
             conn.execute(
                 """
                 insert into surface_relations(
                   relation_id, from_surface_id, to_surface_id, relation_type,
                   confidence, evidence_type, created_by, status
-                ) values (?, ?, ?, 'alias', 0.95, 'fixture', 'fixture', 'active')
+                ) values (?, ?, ?, ?, 0.95, 'fixture', 'fixture', 'active')
                 """,
-                (relation_id, from_id, to_id),
+                (relation_id, from_id, to_id, relation_type),
             )
         conn.execute(
             """
@@ -219,6 +277,12 @@ def _make_snapshot(path: Path) -> None:
             ("surface:apache-kafka", 55, "ok", "2026-05-01T00:00:00Z"),
             ("surface:rails", 0, "ok", "2026-05-01T00:00:00Z"),
             ("surface:ruby-on-rails", 48, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:js", 0, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:javascript", 44, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:nodejs", 0, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:node.js", 30, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:vue", 0, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:vue-3", 52, "ok", "2026-05-01T00:00:00Z"),
             ("surface:llmops", None, "unknown", "2026-05-01T00:00:00Z"),
             ("surface:vector-search", 35, "ok", "2026-05-01T00:00:00Z"),
             ("surface:aaa-low-quality", 28, "ok", "2026-05-01T00:00:00Z"),
@@ -229,18 +293,31 @@ def _make_snapshot(path: Path) -> None:
             "surface:kubernetes": (40, "ok", "healthy"),
             "surface:react": (12, "ok", "healthy"),
         }
+        boss_overrides = {
+            "surface:python": (120, "ok", "healthy"),
+            "surface:kubernetes": (1500, "ok", "too_wide"),
+            "surface:react": (0, "ok", "zero"),
+        }
         cts_bucket_overrides = {
             "surface:kubernetes": "too_wide",
             "surface:react": "zero",
             "surface:terraform": "zero",
             "surface:kafka": "stale",
             "surface:rails": "zero",
+            "surface:js": "zero",
+            "surface:nodejs": "zero",
+            "surface:vue": "zero",
             "surface:llmops": "unknown",
         }
-        for provider in ("cts", "liepin"):
+        for provider in ("boss", "cts", "liepin"):
             for surface_id, total, status, observed_at in cts_observations:
                 if provider == "liepin":
                     total, status, bucket = liepin_overrides.get(
+                        surface_id,
+                        (total, status, "unknown" if status != "ok" else "healthy"),
+                    )
+                elif provider == "boss":
+                    total, status, bucket = boss_overrides.get(
                         surface_id,
                         (total, status, "unknown" if status != "ok" else "healthy"),
                     )
