@@ -198,11 +198,17 @@ def test_fake_dry_run_persists_observations_and_probe_job_status(
 
     assert summary.scheduled == 1
     assert summary.completed == 1
-    assert store.list_probe_jobs("surface-python")[0]["status"] == "succeeded"
+    probe_job = store.list_probe_jobs("surface-python")[0]
+    assert probe_job["status"] == "succeeded"
+    assert probe_job["provider"] == "cts"
+    assert probe_job["query_hash"] == runner.query_hash("Python", "keyword")
     observation = store.list_observations("surface-python")[0]
+    assert observation["provider"] == "cts"
     assert observation["status"] == "ok"
     assert observation["total"] == 42
     assert observation["query_mode"] == "keyword"
+    assert observation["provider_api_version"] == "dry-run-v1"
+    assert observation["recall_bucket"] == "healthy"
     assert client.requests[0].query_mode == "keyword"
 
 
@@ -492,7 +498,7 @@ def test_dry_run_observations_do_not_suppress_real_probe_with_same_query(
     assert summary.completed == 1
     assert real_client.requests == [("Python", "keyword")]
     assert sorted(
-        row["cts_api_version"] for row in store.list_observations("surface-python")
+        row["provider_api_version"] for row in store.list_observations("surface-python")
     ) == ["dry-run-v1", "v1"]
 
 
@@ -598,7 +604,7 @@ def test_real_api_version_change_schedules_distinct_probe_job(
     assert summary.completed == 1
     assert len(store.list_probe_jobs("surface-python")) == 2
     assert sorted(
-        row["cts_api_version"] for row in store.list_observations("surface-python")
+        row["provider_api_version"] for row in store.list_observations("surface-python")
     ) == ["v1", "v2"]
 
 

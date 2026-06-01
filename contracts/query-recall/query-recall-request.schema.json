@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "QueryRecallRequestTerm": {
+      "additionalProperties": false,
+      "description": "One input term from a SeekTalent query term pool.",
+      "properties": {
+        "source": {
+          "default": "query_term_pool",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "strength": {
+          "default": "required",
+          "enum": [
+            "required",
+            "preferred",
+            "nice_to_have"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "QueryRecallRequestTerm",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "SeekTalent query recall analysis request.",
+  "properties": {
+    "max_alternatives": {
+      "default": 5,
+      "maximum": 50,
+      "minimum": 0,
+      "title": "Max Alternatives",
+      "type": "integer"
+    },
+    "max_precision_companions": {
+      "default": 3,
+      "maximum": 20,
+      "minimum": 0,
+      "title": "Max Precision Companions",
+      "type": "integer"
+    },
+    "provider": {
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    },
+    "query_mode": {
+      "default": "keyword",
+      "enum": [
+        "keyword",
+        "exact",
+        "phrase",
+        "boolean"
+      ],
+      "title": "Query Mode",
+      "type": "string"
+    },
+    "query_terms": {
+      "items": {
+        "$ref": "#/$defs/QueryRecallRequestTerm"
+      },
+      "title": "Query Terms",
+      "type": "array"
+    },
+    "query_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Query Text"
+    },
+    "request_id": {
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "query-recall-request-v1",
+      "default": "query-recall-request-v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "provider"
+  ],
+  "title": "QueryRecallRequest",
+  "type": "object"
+}

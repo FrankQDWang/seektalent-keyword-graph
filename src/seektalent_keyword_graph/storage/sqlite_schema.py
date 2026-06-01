@@ -21,7 +21,7 @@ BUILD_TABLES = {
     "surface_relations",
     "cooccurrence_edges",
     "probe_jobs",
-    "cts_recall_observations",
+    "provider_recall_observations",
     "review_decisions",
     "build_events",
 }
@@ -42,8 +42,10 @@ BUILD_INDEXES = {
     "idx_build_cooccurrence_edges_surface_a",
     "idx_build_cooccurrence_edges_surface_b",
     "idx_build_probe_jobs_surface_id",
+    "idx_build_probe_jobs_provider_query",
     "idx_build_probe_jobs_dedupe_key",
-    "idx_build_observations_surface_observed",
+    "idx_build_provider_observations_surface_observed",
+    "idx_build_provider_observations_query_observed",
     "idx_build_review_decisions_target",
     "idx_build_events_builder_run_id",
 }
@@ -55,7 +57,7 @@ SNAPSHOT_TABLES = {
     "concept_surfaces",
     "surface_relations",
     "cooccurrence_edges",
-    "cts_recall_observations",
+    "provider_recall_observations",
     "selection_policy_meta",
 }
 
@@ -68,7 +70,8 @@ SNAPSHOT_INDEXES = {
     "idx_snapshot_surface_relations_to_type",
     "idx_snapshot_cooccurrence_edges_surface_a",
     "idx_snapshot_cooccurrence_edges_surface_b",
-    "idx_snapshot_observations_surface_observed",
+    "idx_snapshot_provider_observations_surface_observed",
+    "idx_snapshot_provider_observations_query_observed",
 }
 
 REQUIRED_SNAPSHOT_META_KEYS = {
@@ -80,6 +83,9 @@ REQUIRED_SNAPSHOT_META_KEYS = {
     "builder_run_id",
     "build_report_sha256",
     "manifest_sha256",
+    "provider_probe_window_start",
+    "provider_probe_window_end",
+    "provider_sources",
     "cts_probe_window_start",
     "cts_probe_window_end",
     "created_by_package_version",
@@ -219,8 +225,10 @@ create table if not exists cooccurrence_edges (
 
 create table if not exists probe_jobs (
   probe_job_id text primary key,
+  provider text not null,
   surface_id text not null references surfaces(surface_id),
   query_text text not null,
+  query_hash text not null,
   query_mode text not null,
   priority integer not null,
   dedupe_key text not null unique,
@@ -233,9 +241,10 @@ create table if not exists probe_jobs (
   last_error_code text
 );
 
-create table if not exists cts_recall_observations (
+create table if not exists provider_recall_observations (
   observation_id text primary key,
   probe_job_id text not null references probe_jobs(probe_job_id),
+  provider text not null,
   surface_id text not null references surfaces(surface_id),
   query_text text not null,
   query_hash text not null,
@@ -245,8 +254,10 @@ create table if not exists cts_recall_observations (
   status text not null,
   error_code text,
   observed_at text not null,
-  cts_api_version text not null,
-  builder_run_id text not null references builder_runs(builder_run_id)
+  recall_bucket text not null,
+  provider_api_version text not null,
+  builder_run_id text not null references builder_runs(builder_run_id),
+  evidence_ref text
 );
 
 create table if not exists review_decisions (
@@ -283,8 +294,10 @@ create index if not exists idx_build_surface_relations_to_type on surface_relati
 create index if not exists idx_build_cooccurrence_edges_surface_a on cooccurrence_edges(surface_id_a);
 create index if not exists idx_build_cooccurrence_edges_surface_b on cooccurrence_edges(surface_id_b);
 create index if not exists idx_build_probe_jobs_surface_id on probe_jobs(surface_id);
+create index if not exists idx_build_probe_jobs_provider_query on probe_jobs(provider, query_hash, query_mode);
 create index if not exists idx_build_probe_jobs_dedupe_key on probe_jobs(dedupe_key);
-create index if not exists idx_build_observations_surface_observed on cts_recall_observations(surface_id, observed_at);
+create index if not exists idx_build_provider_observations_surface_observed on provider_recall_observations(provider, surface_id, observed_at);
+create index if not exists idx_build_provider_observations_query_observed on provider_recall_observations(provider, query_hash, query_mode, observed_at);
 create index if not exists idx_build_review_decisions_target on review_decisions(target_type, target_id);
 create index if not exists idx_build_events_builder_run_id on build_events(builder_run_id);
 """
@@ -360,8 +373,9 @@ create table if not exists cooccurrence_edges (
   last_computed_at text not null
 );
 
-create table if not exists cts_recall_observations (
+create table if not exists provider_recall_observations (
   observation_id text primary key,
+  provider text not null,
   surface_id text not null references surfaces(surface_id),
   query_text text not null,
   query_hash text not null,
@@ -371,8 +385,10 @@ create table if not exists cts_recall_observations (
   status text not null,
   error_code text,
   observed_at text not null,
-  cts_api_version text not null,
-  builder_run_id text not null
+  recall_bucket text not null,
+  provider_api_version text not null,
+  builder_run_id text not null,
+  evidence_ref text
 );
 
 create table if not exists selection_policy_meta (
@@ -388,5 +404,6 @@ create index if not exists idx_snapshot_surface_relations_from_type on surface_r
 create index if not exists idx_snapshot_surface_relations_to_type on surface_relations(to_surface_id, relation_type);
 create index if not exists idx_snapshot_cooccurrence_edges_surface_a on cooccurrence_edges(surface_id_a);
 create index if not exists idx_snapshot_cooccurrence_edges_surface_b on cooccurrence_edges(surface_id_b);
-create index if not exists idx_snapshot_observations_surface_observed on cts_recall_observations(surface_id, observed_at);
+create index if not exists idx_snapshot_provider_observations_surface_observed on provider_recall_observations(provider, surface_id, observed_at);
+create index if not exists idx_snapshot_provider_observations_query_observed on provider_recall_observations(provider, query_hash, query_mode, observed_at);
 """

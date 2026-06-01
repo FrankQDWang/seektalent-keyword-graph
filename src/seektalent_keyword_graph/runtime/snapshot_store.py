@@ -86,6 +86,7 @@ class SQLiteSnapshotStore:
             self._validate_meta(meta)
             self._validate_references()
             self._validate_privacy_in_text_columns()
+            self._validate_provider_recall_coverage()
         except sqlite3.DatabaseError as exc:
             raise SnapshotFormatError(f"invalid SQLite snapshot: {self.path}") from exc
 
@@ -168,10 +169,58 @@ class SQLiteSnapshotStore:
         )
 
     def list_recall_observations(self, surface_id: str) -> list[dict[str, object]]:
+        return self.list_surface_recall_observations("cts", surface_id)
+
+    def list_supported_providers(self) -> list[str]:
+        raw_sources = self.meta().get("provider_sources", "[]")
+        try:
+            providers = json.loads(raw_sources)
+        except json.JSONDecodeError as exc:
+            raise SnapshotSchemaError("provider_sources meta must be valid JSON") from exc
+        if not isinstance(providers, list) or not all(
+            isinstance(provider, str) and provider.strip()
+            for provider in providers
+        ):
+            raise SnapshotSchemaError("provider_sources meta must be a non-empty string list")
+        return sorted(providers)
+
+    def get_latest_recall_observation(
+        self, provider: str, surface_id: str, query_hash: str, query_mode: str
+    ) -> dict[str, object] | None:
+        return self._fetch_one(
+            """
+            select * from provider_recall_observations
+            where provider = ? and surface_id = ? and query_hash = ? and query_mode = ?
+            order by observed_at desc, observation_id desc
+            limit 1
+            """,
+            (provider, surface_id, query_hash, query_mode),
+        )
+
+    def list_surface_recall_observations(
+        self, provider: str, surface_id: str
+    ) -> list[dict[str, object]]:
         return self._fetch_all(
-            "select * from cts_recall_observations where surface_id = ? "
+            "select * from provider_recall_observations "
+            "where provider = ? and surface_id = ? "
             "order by observed_at desc, observation_id",
-            (surface_id,),
+            (provider, surface_id),
+        )
+
+    def get_surface_by_query_text(
+        self, provider: str, query_text: str, query_mode: str
+    ) -> dict[str, object] | None:
+        return self._fetch_one(
+            """
+            select s.*
+            from provider_recall_observations o
+            join surfaces s on s.surface_id = o.surface_id
+            where o.provider = ? and o.query_text = ? and o.query_mode = ?
+              and s.serving_status = 'active'
+            order by o.observed_at desc, o.observation_id desc
+            limit 1
+            """,
+            (provider, query_text, query_mode),
         )
 
     def _validate_tables(self) -> None:
@@ -204,6 +253,9 @@ class SQLiteSnapshotStore:
             raise SnapshotSchemaError(
                 f"unsupported selection policy version: {policy_version}"
             )
+        providers = self.list_supported_providers()
+        if not providers:
+            raise SnapshotSchemaError("provider_sources meta must not be empty")
 
     def _validate_references(self) -> None:
         orphan_checks = (
@@ -264,7 +316,7 @@ class SQLiteSnapshotStore:
             union all select display_text from surfaces
             union all select canonical_label from concepts
             union all select description from concepts
-            union all select query_text from cts_recall_observations
+            union all select query_text from provider_recall_observations
             """
         ).fetchall()
         haystack = "\n".join(str(row["value"]) for row in rows).lower()
@@ -284,6 +336,35 @@ class SQLiteSnapshotStore:
             raise SnapshotPrivacyError(
                 f"snapshot contains forbidden marker(s): {', '.join(markers)}"
             )
+
+    def _validate_provider_recall_coverage(self) -> None:
+        providers = self.list_supported_providers()
+        for provider in providers:
+            row = self.connection.execute(
+                """
+                select s.surface_id
+                from surfaces s
+                where s.serving_status = 'active'
+                  and s.query_safe = 1
+                  and s.recall_bucket not in ('stale', 'unknown')
+                  and not exists (
+                    select 1
+                    from provider_recall_observations o
+                    where o.provider = ?
+                      and o.surface_id = s.surface_id
+                      and o.status = 'ok'
+                      and o.total is not null
+                  )
+                order by s.surface_id
+                limit 1
+                """,
+                (provider,),
+            ).fetchone()
+            if row is not None:
+                raise SnapshotSchemaError(
+                    "snapshot serving surface lacks valid provider recall "
+                    f"observation for {provider}: {row['surface_id']}"
+                )
 
     def _fetch_one(
         self, sql: str, parameters: tuple[object, ...]

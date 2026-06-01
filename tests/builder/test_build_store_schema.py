@@ -125,8 +125,10 @@ def test_build_store_initializes_schema_and_round_trips_all_owned_entities(
         )
         store.insert_probe_job(
             probe_job_id="probe-1",
+            provider="cts",
             surface_id="surface-1",
             query_text="Python",
+            query_hash="hash-python",
             query_mode="keyword",
             priority=1,
             dedupe_key="python|keyword",
@@ -138,8 +140,30 @@ def test_build_store_initializes_schema_and_round_trips_all_owned_entities(
             created_reason="new_surface",
             last_error_code=None,
         )
-        store.insert_cts_recall_observation(
+        probe_job = store.list_probe_jobs("surface-1")[0]
+        assert probe_job["provider"] == "cts"
+        assert probe_job["query_hash"] == "hash-python"
+
+        store.insert_provider_recall_observation(
             observation_id="obs-1",
+            provider="cts",
+            probe_job_id="probe-1",
+            surface_id="surface-1",
+            query_text="Python",
+            query_hash="hash-python",
+            query_mode="keyword",
+            total=42,
+            latency_ms=12,
+            status="ok",
+            error_code=None,
+            observed_at="2026-05-31T00:00:00Z",
+            recall_bucket="healthy",
+            provider_api_version="fake-v1",
+            builder_run_id="run-1",
+            evidence_ref="probe:obs-1",
+        )
+        store.insert_cts_recall_observation(
+            observation_id="obs-compat",
             probe_job_id="probe-1",
             surface_id="surface-1",
             query_text="Python",
@@ -181,7 +205,11 @@ def test_build_store_initializes_schema_and_round_trips_all_owned_entities(
         assert store.list_surface_relations("surface-1")[0]["relation_type"] == "alias"
         assert store.list_cooccurrence_edges("surface-1")[0]["edge_id"] == "edge-1"
         assert store.list_probe_jobs("surface-1")[0]["probe_job_id"] == "probe-1"
-        assert store.list_observations("surface-1")[0]["total"] == 42
+        observations = store.list_observations("surface-1")
+        assert {observation["provider"] for observation in observations} == {"cts"}
+        assert observations[0]["total"] == 42
+        assert observations[0]["recall_bucket"] == "healthy"
+        assert observations[0]["provider_api_version"] == "fake-v1"
         decision = store.list_review_decisions("surface", "surface-1")[0]
         assert decision["decision"] == "approve"
         assert store.list_build_events("run-1")[0]["message"] == "imported"

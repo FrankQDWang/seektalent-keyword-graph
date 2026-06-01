@@ -31,6 +31,10 @@ def _make_snapshot(path: Path) -> None:
             "update snapshot_meta set value = ? where key = ?",
             ("policy-v1", "selection_policy_version"),
         )
+        conn.execute(
+            "insert or replace into snapshot_meta(key, value) values (?, ?)",
+            ("provider_sources", '["cts"]'),
+        )
         for surface_id, text, bucket in [
             ("surface:python", "Python", "healthy"),
             ("surface:kubernetes", "Kubernetes", "too_wide"),
@@ -222,12 +226,13 @@ def _make_snapshot(path: Path) -> None:
         ]:
             conn.execute(
                 """
-                insert into cts_recall_observations(
-                  observation_id, surface_id, query_text, query_hash, query_mode,
-                  total, latency_ms, status, error_code, observed_at,
-                  cts_api_version, builder_run_id
+                insert into provider_recall_observations(
+                  observation_id, provider, surface_id, query_text, query_hash,
+                  query_mode, total, latency_ms, status, error_code, observed_at,
+                  recall_bucket, provider_api_version, builder_run_id, evidence_ref
                 ) values (
-                  ?, ?, ?, ?, 'keyword', ?, 10, ?, null, ?, 'fixture', 'fixture'
+                  ?, 'cts', ?, ?, ?, 'keyword', ?, 10, ?, null, ?, ?,
+                  'fixture', 'fixture', ?
                 )
                 """,
                 (
@@ -238,6 +243,8 @@ def _make_snapshot(path: Path) -> None:
                     total,
                     status,
                     observed_at,
+                    "unknown" if status != "ok" else "healthy",
+                    f"fixture:obs:{surface_id}",
                 ),
             )
         conn.commit()

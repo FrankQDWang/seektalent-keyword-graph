@@ -4,9 +4,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 
+from seektalent_keyword_graph.domain.provider_recall import (
+    recall_bucket_for_observation,
+)
 from seektalent_keyword_graph.storage.sqlite_migrations import migrate_build_db
 
 
@@ -358,8 +362,10 @@ class BuildStore:
         self,
         *,
         probe_job_id: str,
+        provider: str = "cts",
         surface_id: str,
         query_text: str,
+        query_hash: str | None = None,
         query_mode: str,
         priority: int,
         dedupe_key: str,
@@ -374,15 +380,17 @@ class BuildStore:
         self._execute(
             """
             insert into probe_jobs(
-              probe_job_id, surface_id, query_text, query_mode, priority, dedupe_key,
-              scheduled_at, not_before, attempt_count, status, rate_limit_bucket,
-              created_reason, last_error_code
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              probe_job_id, provider, surface_id, query_text, query_hash, query_mode,
+              priority, dedupe_key, scheduled_at, not_before, attempt_count, status,
+              rate_limit_bucket, created_reason, last_error_code
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 probe_job_id,
+                provider,
                 surface_id,
                 query_text,
+                query_hash or _query_hash(query_text, query_mode),
                 query_mode,
                 priority,
                 dedupe_key,
@@ -400,8 +408,10 @@ class BuildStore:
         self,
         *,
         probe_job_id: str,
+        provider: str = "cts",
         surface_id: str,
         query_text: str,
+        query_hash: str | None = None,
         query_mode: str,
         priority: int,
         dedupe_key: str,
@@ -416,8 +426,10 @@ class BuildStore:
         try:
             self.insert_probe_job(
                 probe_job_id=probe_job_id,
+                provider=provider,
                 surface_id=surface_id,
                 query_text=query_text,
+                query_hash=query_hash,
                 query_mode=query_mode,
                 priority=priority,
                 dedupe_key=dedupe_key,
@@ -461,16 +473,59 @@ class BuildStore:
         cts_api_version: str,
         builder_run_id: str,
     ) -> None:
+        self.insert_provider_recall_observation(
+            observation_id=observation_id,
+            provider="cts",
+            probe_job_id=probe_job_id,
+            surface_id=surface_id,
+            query_text=query_text,
+            query_hash=query_hash,
+            query_mode=query_mode,
+            total=total,
+            latency_ms=latency_ms,
+            status=status,
+            error_code=error_code,
+            observed_at=observed_at,
+            recall_bucket=recall_bucket_for_observation(
+                total=total,
+                status=status,
+            ),
+            provider_api_version=cts_api_version,
+            builder_run_id=builder_run_id,
+            evidence_ref=f"cts:{observation_id}",
+        )
+
+    def insert_provider_recall_observation(
+        self,
+        *,
+        observation_id: str,
+        provider: str,
+        probe_job_id: str,
+        surface_id: str,
+        query_text: str,
+        query_hash: str,
+        query_mode: str,
+        total: int | None,
+        latency_ms: int | None,
+        status: str,
+        error_code: str | None,
+        observed_at: str,
+        recall_bucket: str,
+        provider_api_version: str,
+        builder_run_id: str,
+        evidence_ref: str | None,
+    ) -> None:
         self._execute(
             """
-            insert into cts_recall_observations(
-              observation_id, probe_job_id, surface_id, query_text, query_hash,
+            insert into provider_recall_observations(
+              observation_id, provider, probe_job_id, surface_id, query_text, query_hash,
               query_mode, total, latency_ms, status, error_code, observed_at,
-              cts_api_version, builder_run_id
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              recall_bucket, provider_api_version, builder_run_id, evidence_ref
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 observation_id,
+                provider,
                 probe_job_id,
                 surface_id,
                 query_text,
@@ -481,8 +536,10 @@ class BuildStore:
                 status,
                 error_code,
                 observed_at,
-                cts_api_version,
+                recall_bucket,
+                provider_api_version,
                 builder_run_id,
+                evidence_ref,
             ),
         )
 
@@ -637,6 +694,7 @@ class BuildStore:
     def find_observation_since(
         self,
         *,
+        provider: str = "cts",
         surface_id: str,
         query_hash: str,
         query_mode: str,
@@ -644,11 +702,18 @@ class BuildStore:
         observed_after: str,
     ) -> dict[str, object] | None:
         return self._fetch_one(
-            "select * from cts_recall_observations "
-            "where surface_id = ? and query_hash = ? and query_mode = ? "
-            "and cts_api_version = ? and observed_at >= ? "
+            "select * from provider_recall_observations "
+            "where provider = ? and surface_id = ? and query_hash = ? and query_mode = ? "
+            "and provider_api_version = ? and observed_at >= ? "
             "order by observed_at desc, observation_id limit 1",
-            (surface_id, query_hash, query_mode, cts_api_version, observed_after),
+            (
+                provider,
+                surface_id,
+                query_hash,
+                query_mode,
+                cts_api_version,
+                observed_after,
+            ),
         )
 
     def update_probe_job(
@@ -698,10 +763,10 @@ class BuildStore:
 
     def latest_successful_observation_total(self, surface_id: str) -> int | None:
         row = self._fetch_one(
-            "select total from cts_recall_observations "
-            "where surface_id = ? and status = ? and total is not null "
+            "select total from provider_recall_observations "
+            "where provider = ? and surface_id = ? and status = ? and total is not null "
             "order by observed_at desc, observation_id limit 1",
-            (surface_id, "ok"),
+            ("cts", surface_id, "ok"),
         )
         if row is None:
             return None
@@ -709,9 +774,9 @@ class BuildStore:
 
     def list_observations(self, surface_id: str) -> list[dict[str, object]]:
         return self._fetch_all(
-            "select * from cts_recall_observations where surface_id = ? "
+            "select * from provider_recall_observations where provider = ? and surface_id = ? "
             "order by observed_at desc, observation_id",
-            (surface_id,),
+            ("cts", surface_id),
         )
 
     def list_review_decisions(
@@ -745,3 +810,7 @@ class BuildStore:
         self, sql: str, parameters: tuple[object, ...]
     ) -> list[dict[str, object]]:
         return [dict(row) for row in self.connection.execute(sql, parameters).fetchall()]
+
+
+def _query_hash(query_text: str, query_mode: str) -> str:
+    return hashlib.sha256(f"{query_mode}\0{query_text}".encode()).hexdigest()

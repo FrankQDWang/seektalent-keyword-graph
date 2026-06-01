@@ -21,6 +21,9 @@ from seektalent_keyword_graph.cts.rate_limit import (
     CtsProbeThrottler,
 )
 from seektalent_keyword_graph.cts.retry import RetryPolicy
+from seektalent_keyword_graph.domain.provider_recall import (
+    recall_bucket_for_observation,
+)
 
 
 class CtsCountLike(Protocol):
@@ -97,6 +100,7 @@ class CtsProbeRunner:
             query_hash = self.query_hash(query_text, self.config.query_mode)
             cts_api_version = self._cts_api_version()
             if self.store.find_observation_since(
+                provider="cts",
                 surface_id=str(surface["surface_id"]),
                 query_hash=query_hash,
                 query_mode=self.config.query_mode,
@@ -122,8 +126,10 @@ class CtsProbeRunner:
             )
             inserted = self.store.insert_probe_job_if_absent(
                 probe_job_id=probe_job_id,
+                provider="cts",
                 surface_id=str(surface["surface_id"]),
                 query_text=query_text,
+                query_hash=query_hash,
                 query_mode=self.config.query_mode,
                 priority=0,
                 dedupe_key=dedupe_key,
@@ -178,8 +184,9 @@ class CtsProbeRunner:
         observation_id = (
             f"cts-obs-{job['probe_job_id']}-{int(job['attempt_count']) + 1}"
         )
-        self.store.insert_cts_recall_observation(
+        self.store.insert_provider_recall_observation(
             observation_id=observation_id,
+            provider="cts",
             probe_job_id=str(job["probe_job_id"]),
             surface_id=str(job["surface_id"]),
             query_text=query_text,
@@ -190,8 +197,13 @@ class CtsProbeRunner:
             status=result.status,
             error_code=result.error_code,
             observed_at=self.config.now.isoformat(),
-            cts_api_version=self._cts_api_version(),
+            recall_bucket=recall_bucket_for_observation(
+                total=result.total if result.status == "ok" else None,
+                status=result.status,
+            ),
+            provider_api_version=self._cts_api_version(),
             builder_run_id=self.config.builder_run_id,
+            evidence_ref=f"cts:{observation_id}",
         )
 
     def _cts_api_version(self) -> str:

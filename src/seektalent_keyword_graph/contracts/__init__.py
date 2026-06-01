@@ -19,9 +19,22 @@ from seektalent_keyword_graph.contracts.query_plan import (
     SchemaVersion,
     WarningCode,
 )
+from seektalent_keyword_graph.contracts.query_recall import (
+    OptimizedQueryTerm,
+    QueryRecallAlternative,
+    QueryRecallLineage,
+    QueryRecallObservation,
+    QueryRecallRecommendation,
+    QueryRecallRequest,
+    QueryRecallRequestTerm,
+    QueryRecallResponse,
+    QueryRecallSchemaVersion,
+    QueryRecallWarning,
+)
 from seektalent_keyword_graph.contracts.snapshot import SnapshotManifest, SnapshotMeta
 
 __all__ = [
+    "OptimizedQueryTerm",
     "BundleType",
     "ConceptSheetRow",
     "QueryBundle",
@@ -31,6 +44,15 @@ __all__ = [
     "QueryPlanRequest",
     "QueryPlanResponse",
     "QueryPlanWarning",
+    "QueryRecallAlternative",
+    "QueryRecallLineage",
+    "QueryRecallObservation",
+    "QueryRecallRecommendation",
+    "QueryRecallRequest",
+    "QueryRecallRequestTerm",
+    "QueryRecallResponse",
+    "QueryRecallSchemaVersion",
+    "QueryRecallWarning",
     "RecallBucket",
     "RejectedReasonCode",
     "RejectedSurface",

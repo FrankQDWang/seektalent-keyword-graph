@@ -35,6 +35,10 @@ def make_snapshot(path: Path) -> None:
             "update snapshot_meta set value = ? where key = ?",
             ("policy-v1", "selection_policy_version"),
         )
+        conn.execute(
+            "insert or replace into snapshot_meta(key, value) values (?, ?)",
+            ("provider_sources", '["cts"]'),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -51,6 +55,40 @@ def test_missing_required_table_fails_with_typed_error(tmp_path: Path) -> None:
         conn.close()
 
     with pytest.raises(SnapshotSchemaError, match="selection_policy_meta"):
+        SQLiteSnapshotStore.open(path)
+
+
+def test_missing_provider_observation_table_fails_with_typed_error(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "snapshot.sqlite3"
+    make_snapshot(path)
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("drop table provider_recall_observations")
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(SnapshotSchemaError, match="provider_recall_observations"):
+        SQLiteSnapshotStore.open(path)
+
+
+def test_missing_provider_observation_index_fails_with_typed_error(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "snapshot.sqlite3"
+    make_snapshot(path)
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("drop index idx_snapshot_provider_observations_query_observed")
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(
+        SnapshotSchemaError, match="idx_snapshot_provider_observations_query_observed"
+    ):
         SQLiteSnapshotStore.open(path)
 
 
@@ -112,6 +150,58 @@ def test_privacy_marker_in_snapshot_fails(tmp_path: Path) -> None:
         conn.close()
 
     with pytest.raises(SnapshotPrivacyError, match="resume_text"):
+        SQLiteSnapshotStore.open(path)
+
+
+def test_privacy_marker_in_provider_observation_query_text_fails(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "snapshot.sqlite3"
+    make_snapshot(path)
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute(
+            "insert into surfaces(surface_id, text_raw, text_norm, display_text, "
+            "language, token_class, query_safe, is_exact_phrase_preferred, "
+            "ambiguity_score, specificity_score, jd_df, jd_tf_total, recall_bucket, "
+            "serving_status, created_at, updated_at) values "
+            "('s1', 'Python', 'python', 'Python', 'en', 'skill', 1, 0, "
+            "0.1, 0.9, 1, 1, 'healthy', 'active', 'now', 'now')"
+        )
+        conn.execute(
+            "insert into provider_recall_observations("
+            "observation_id, provider, surface_id, query_text, query_hash, query_mode, "
+            "total, latency_ms, status, error_code, observed_at, recall_bucket, "
+            "provider_api_version, builder_run_id, evidence_ref) values "
+            "('obs-1', 'cts', 's1', 'candidate_id', 'hash', 'keyword', "
+            "1, 1, 'ok', null, 'now', 'healthy', 'fake-v1', 'run-1', 'probe:obs-1')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(SnapshotPrivacyError, match="candidate_id"):
+        SQLiteSnapshotStore.open(path)
+
+
+def test_serving_surface_without_provider_observation_fails(tmp_path: Path) -> None:
+    path = tmp_path / "snapshot.sqlite3"
+    make_snapshot(path)
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute(
+            "insert into surfaces(surface_id, text_raw, text_norm, display_text, "
+            "language, token_class, query_safe, is_exact_phrase_preferred, "
+            "ambiguity_score, specificity_score, jd_df, jd_tf_total, recall_bucket, "
+            "serving_status, created_at, updated_at) values "
+            "('s1', 'Python', 'python', 'Python', 'en', 'skill', 1, 0, "
+            "0.1, 0.9, 1, 1, 'healthy', 'active', 'now', 'now')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(SnapshotSchemaError, match="provider recall observation"):
         SQLiteSnapshotStore.open(path)
 
 

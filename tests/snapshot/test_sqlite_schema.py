@@ -51,6 +51,10 @@ def make_snapshot(path: Path) -> None:
             "update snapshot_meta set value = ? where key = ?",
             ("policy-v1", "selection_policy_version"),
         )
+        conn.execute(
+            "insert or replace into snapshot_meta(key, value) values (?, ?)",
+            ("provider_sources", '["cts"]'),
+        )
         conn.commit()
     finally:
         conn.close()

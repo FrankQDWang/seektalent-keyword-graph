@@ -1,0 +1,98 @@
+{
+  "schema_version": "query-recall-response-v1",
+  "request_id": "req-query-recall-001",
+  "provider": "cts",
+  "kg_snapshot_id": "kg-2026-06-01",
+  "selection_policy_version": "policy-v1",
+  "input_observations": [
+    {
+      "provider": "cts",
+      "surface_id": "surface-k8s",
+      "query_text": "k8s",
+      "query_hash": "sha256:k8s",
+      "query_mode": "keyword",
+      "total": 0,
+      "latency_ms": 12,
+      "status": "ok",
+      "error_code": null,
+      "observed_at": "2026-06-01T00:00:00Z",
+      "recall_bucket": "zero",
+      "provider_api_version": "dry-run-v1",
+      "evidence_ref": "probe:obs-k8s"
+    }
+  ],
+  "alternatives": [
+    {
+      "query_text": "Kubernetes",
+      "surface_id": "surface-kubernetes",
+      "query_mode": "keyword",
+      "relation_type": "alias",
+      "confidence": 0.94,
+      "source_concept_id": "concept-kubernetes",
+      "source_surface_id": "surface-k8s",
+      "target_surface_id": "surface-kubernetes",
+      "evidence_type": "curated_alias",
+      "evidence_ref": "relation:alias-k8s-kubernetes",
+      "observation": {
+        "provider": "cts",
+        "surface_id": "surface-kubernetes",
+        "query_text": "Kubernetes",
+        "query_hash": "sha256:kubernetes",
+        "query_mode": "keyword",
+        "total": 42,
+        "latency_ms": 20,
+        "status": "ok",
+        "error_code": null,
+        "observed_at": "2026-06-01T00:00:00Z",
+        "recall_bucket": "healthy",
+        "provider_api_version": "dry-run-v1",
+        "evidence_ref": "probe:obs-kubernetes"
+      }
+    }
+  ],
+  "recommendations": [
+    {
+      "action": "replace",
+      "query_text": "k8s",
+      "recommended_query_text": "Kubernetes",
+      "reason_code": "zero_recall",
+      "reason": "Original term has zero recall and alias has healthy recall.",
+      "provider": "cts",
+      "evidence_observation_ids": [
+        "probe:obs-k8s",
+        "probe:obs-kubernetes"
+      ]
+    }
+  ],
+  "warnings": [
+    {
+      "code": "zero_recall",
+      "message": "Input term has zero observed recall.",
+      "query_text": "k8s",
+      "provider": "cts"
+    }
+  ],
+  "optimized_terms": [
+    {
+      "query_text": "Kubernetes",
+      "query_mode": "keyword",
+      "action": "replace",
+      "rank": 1,
+      "source_query_text": "k8s",
+      "provider": "cts",
+      "recall_bucket": "healthy",
+      "reason": "Alias has healthier provider recall."
+    }
+  ],
+  "lineage": {
+    "input_hash": "sha256:input",
+    "snapshot_schema_version": "snapshot-v1",
+    "selection_policy_version": "policy-v1",
+    "provider_sources": [
+      "cts"
+    ],
+    "source_refs": [
+      "snapshot:kg-2026-06-01"
+    ]
+  }
+}

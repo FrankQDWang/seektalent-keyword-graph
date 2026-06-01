@@ -16,6 +16,10 @@ from seektalent_keyword_graph.contracts.snapshot import (
     SnapshotManifest,
     manifest_identity_sha256,
 )
+from seektalent_keyword_graph.domain.provider_recall import (
+    ProviderRecallPolicy,
+    recall_bucket_for_observation,
+)
 from seektalent_keyword_graph.release_validation import validate_release_artifacts
 from seektalent_keyword_graph.runtime.snapshot_store import SQLiteSnapshotStore
 from seektalent_keyword_graph.storage.sqlite_migrations import migrate_runtime_snapshot
@@ -38,6 +42,8 @@ class BuildSnapshotConfig:
     max_observation_age_days: int = 7
     healthy_min_total: int = 10
     healthy_max_total: int = 1000
+    provider_sources: tuple[str, ...] = ("cts",)
+    default_serving_provider: str = "cts"
 
 
 @dataclass(frozen=True)
@@ -150,7 +156,7 @@ def build_runtime_snapshot(
                 ),
                 order_by="edge_id",
             )
-            _insert_latest_observations(snapshot_conn, latest_observations)
+            _insert_latest_observations(snapshot_conn, latest_observations, config)
             snapshot_conn.commit()
         finally:
             snapshot_conn.close()
@@ -199,21 +205,22 @@ def _build_report_payload(
         "surface_relations",
         "cooccurrence_edges",
         "probe_jobs",
-        "cts_recall_observations",
+        "provider_recall_observations",
     ):
         row = build_conn.execute(f"select count(*) from {table}").fetchone()
         counts[table] = row[0]
-    cts_status_counts = {
-        row["status"]: row["count"]
-        for row in build_conn.execute(
-            """
-            select status, count(*) as count
-            from cts_recall_observations
-            group by status
-            order by status
-            """
-        ).fetchall()
-    }
+    provider_status_counts: dict[str, dict[str, int]] = {}
+    for row in build_conn.execute(
+        """
+        select provider, status, count(*) as count
+        from provider_recall_observations
+        group by provider, status
+        order by provider, status
+        """
+    ).fetchall():
+        provider_status_counts.setdefault(str(row["provider"]), {})[
+            str(row["status"])
+        ] = int(row["count"])
     return {
         "builder_run_id": config.builder_run_id,
         "built_at": config.built_at,
@@ -231,7 +238,7 @@ def _build_report_payload(
             "surface_relations": counts["surface_relations"],
             "cooccurrence_edges": counts["cooccurrence_edges"],
         },
-        "cts_observation_status_counts": cts_status_counts,
+        "provider_observation_status_counts": provider_status_counts,
         "replay_summary": {"status": "not_run", "case_count": 0},
         "privacy_scan": {"status": "passed", "forbidden_marker_count": 0},
         "validation_status": "passed",
@@ -253,6 +260,11 @@ def _insert_meta(
         "builder_run_id": config.builder_run_id,
         "build_report_sha256": build_report_sha256,
         "manifest_sha256": manifest_sha256,
+        "provider_probe_window_start": config.cts_probe_window_start,
+        "provider_probe_window_end": config.cts_probe_window_end,
+        "provider_sources": json.dumps(
+            list(config.provider_sources), sort_keys=True, separators=(",", ":")
+        ),
         "cts_probe_window_start": config.cts_probe_window_start,
         "cts_probe_window_end": config.cts_probe_window_end,
         "created_by_package_version": __version__,
@@ -284,6 +296,8 @@ def _project_surfaces(
 ) -> None:
     bucket_observation_by_surface: dict[str, sqlite3.Row] = {}
     for row in latest_observations:
+        if row["provider"] != config.default_serving_provider:
+            continue
         surface_id = str(row["surface_id"])
         current = bucket_observation_by_surface.get(surface_id)
         if current is None or _observation_sort_key(row) > _observation_sort_key(
@@ -316,6 +330,11 @@ def _project_surfaces(
                 else None
             ),
             config=config,
+            status=(
+                str(bucket_observation["status"])
+                if bucket_observation is not None
+                else "unknown"
+            ),
         )
         snapshot_conn.execute(
             """
@@ -368,18 +387,23 @@ def _copy_table(
 def _latest_valid_observations(build_conn: sqlite3.Connection) -> list[sqlite3.Row]:
     rows = build_conn.execute(
         """
-        select observation_id, surface_id, query_text, query_hash, query_mode, total,
-               latency_ms, status, error_code, observed_at, cts_api_version,
-               builder_run_id
-        from cts_recall_observations
+        select observation_id, provider, surface_id, query_text, query_hash, query_mode,
+               total, latency_ms, status, error_code, observed_at, recall_bucket,
+               provider_api_version, builder_run_id, evidence_ref
+        from provider_recall_observations
         where status = 'ok' and total is not null
-        order by surface_id, query_hash, query_mode,
+        order by provider, surface_id, query_hash, query_mode,
                  observed_at desc, observation_id desc
         """
     ).fetchall()
-    latest: dict[tuple[str, str, str], sqlite3.Row] = {}
+    latest: dict[tuple[str, str, str, str], sqlite3.Row] = {}
     for row in rows:
-        key = (str(row["surface_id"]), str(row["query_hash"]), str(row["query_mode"]))
+        key = (
+            str(row["provider"]),
+            str(row["surface_id"]),
+            str(row["query_hash"]),
+            str(row["query_mode"]),
+        )
         latest.setdefault(key, row)
     return sorted(latest.values(), key=lambda row: str(row["observation_id"]))
 
@@ -389,19 +413,22 @@ def _observation_sort_key(row: sqlite3.Row) -> tuple[str, str]:
 
 
 def _insert_latest_observations(
-    conn: sqlite3.Connection, observations: list[sqlite3.Row]
+    conn: sqlite3.Connection,
+    observations: list[sqlite3.Row],
+    config: BuildSnapshotConfig,
 ) -> None:
     for row in observations:
         conn.execute(
             """
-            insert into cts_recall_observations(
-              observation_id, surface_id, query_text, query_hash, query_mode,
-              total, latency_ms, status, error_code, observed_at, cts_api_version,
-              builder_run_id
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            insert into provider_recall_observations(
+              observation_id, provider, surface_id, query_text, query_hash, query_mode,
+              total, latency_ms, status, error_code, observed_at, recall_bucket,
+              provider_api_version, builder_run_id, evidence_ref
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row["observation_id"],
+                row["provider"],
                 row["surface_id"],
                 row["query_text"],
                 row["query_hash"],
@@ -411,26 +438,37 @@ def _insert_latest_observations(
                 row["status"],
                 row["error_code"],
                 row["observed_at"],
-                row["cts_api_version"],
+                _recall_bucket(
+                    total=int(row["total"]) if row["total"] is not None else None,
+                    observed_at=str(row["observed_at"]),
+                    status=str(row["status"]),
+                    config=config,
+                ),
+                row["provider_api_version"],
                 row["builder_run_id"],
+                row["evidence_ref"],
             ),
         )
 
 
 def _recall_bucket(
-    *, total: int | None, observed_at: str | None, config: BuildSnapshotConfig
+    *,
+    total: int | None,
+    observed_at: str | None,
+    status: str = "ok",
+    config: BuildSnapshotConfig,
 ) -> str:
-    if total is None or observed_at is None:
-        return "unknown"
-    if _is_stale(observed_at, config):
-        return "stale"
-    if total == 0:
-        return "zero"
-    if total < config.healthy_min_total:
-        return "too_narrow"
-    if total > config.healthy_max_total:
-        return "too_wide"
-    return "healthy"
+    return recall_bucket_for_observation(
+        total=total,
+        status=status,
+        observed_at=observed_at,
+        reference_time=config.built_at,
+        policy=ProviderRecallPolicy(
+            healthy_min_total=config.healthy_min_total,
+            healthy_max_total=config.healthy_max_total,
+            max_observation_age_days=config.max_observation_age_days,
+        ),
+    )
 
 
 def _is_stale(observed_at: str, config: BuildSnapshotConfig) -> bool:

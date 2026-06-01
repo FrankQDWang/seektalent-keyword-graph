@@ -291,8 +291,9 @@ def _validate_serving_surface_policy(
           and s.recall_bucket not in ('unknown', 'stale')
           and not exists (
             select 1
-            from cts_recall_observations o
+            from provider_recall_observations o
             where o.surface_id = s.surface_id
+              and o.provider = 'cts'
               and o.status = 'ok'
               and o.total is not null
             )

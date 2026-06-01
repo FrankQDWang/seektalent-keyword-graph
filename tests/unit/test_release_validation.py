@@ -158,7 +158,7 @@ def test_release_validation_rejects_serving_surface_without_valid_policy_observa
 ) -> None:
     conn = sqlite3.connect(valid_artifacts.snapshot_path)
     try:
-        conn.execute("delete from cts_recall_observations")
+        conn.execute("delete from provider_recall_observations")
         conn.execute(
             "update surfaces set recall_bucket = 'healthy' "
             "where surface_id = 'surface-1'"
@@ -174,7 +174,9 @@ def test_release_validation_rejects_serving_surface_without_valid_policy_observa
     )
 
     assert not result.ok
-    assert any("valid recall observation" in error.message for error in result.errors)
+    assert any(
+        "provider recall observation" in error.message for error in result.errors
+    )
 
 
 @pytest.mark.parametrize("recall_bucket", ["stale", "unknown"])
@@ -183,7 +185,7 @@ def test_release_validation_accepts_explicit_stale_or_unknown_policy_bucket(
 ) -> None:
     conn = sqlite3.connect(valid_artifacts.snapshot_path)
     try:
-        conn.execute("delete from cts_recall_observations")
+        conn.execute("delete from provider_recall_observations")
         conn.execute(
             "update surfaces set recall_bucket = ? where surface_id = 'surface-1'",
             (recall_bucket,),

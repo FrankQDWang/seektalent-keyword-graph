@@ -109,8 +109,10 @@ def seed_build_db(path: Path) -> None:
         )
         store.insert_probe_job(
             probe_job_id="probe-python",
+            provider="cts",
             surface_id="surface-python",
             query_text="Python",
+            query_hash="hash-python",
             query_mode="keyword",
             priority=1,
             dedupe_key="python:keyword",
@@ -214,12 +216,19 @@ def test_build_snapshot_projects_release_safe_runtime_artifacts(
         assert meta["manifest_sha256"] != "0" * 64
 
         observations = conn.execute(
-            "select observation_id, total, status from cts_recall_observations"
+            "select provider, observation_id, total, status, recall_bucket, "
+            "provider_api_version from provider_recall_observations"
         ).fetchall()
-        assert observations == [("obs-python-ok", 42, "ok")]
+        assert observations == [
+            ("cts", "obs-python-ok", 42, "ok", "healthy", "fake-v1")
+        ]
         assert conn.execute(
             "select recall_bucket from surfaces where surface_id = 'surface-python'"
         ).fetchone() == ("healthy",)
+        assert conn.execute(
+            "select query_text from provider_recall_observations "
+            "where provider = 'cts' and query_hash = 'hash-python'"
+        ).fetchone() == ("Python",)
         assert conn.execute("select count(*) from concepts").fetchone() == (1,)
         assert conn.execute("select count(*) from surfaces").fetchone() == (2,)
         assert conn.execute("select count(*) from surface_relations").fetchone() == (1,)
@@ -243,7 +252,10 @@ def test_build_snapshot_projects_release_safe_runtime_artifacts(
         "concept_surfaces": 1,
         "surface_relations": 1,
     }
-    assert build_report["cts_observation_status_counts"] == {"error": 1, "ok": 1}
+    assert build_report["provider_observation_status_counts"] == {
+        "cts": {"error": 1, "ok": 1}
+    }
+    assert "cts_observation_status_counts" not in build_report
     assert build_report["replay_summary"]["status"] == "not_run"
     assert build_report["privacy_scan"]["status"] == "passed"
     assert build_report["validation_status"] == "passed"
@@ -310,5 +322,44 @@ def test_build_snapshot_recall_bucket_uses_latest_valid_observation_per_surface(
         assert conn.execute(
             "select recall_bucket from surfaces where surface_id = 'surface-python'"
         ).fetchone() == ("zero",)
+        assert conn.execute(
+            "select recall_bucket from provider_recall_observations "
+            "where observation_id = 'obs-python-new-zero'"
+        ).fetchone() == ("zero",)
     finally:
         conn.close()
+
+
+def test_snapshot_store_reads_provider_specific_observations(tmp_path: Path) -> None:
+    build_db = tmp_path / "build.sqlite3"
+    seed_build_db(build_db)
+    result = build_runtime_snapshot(
+        build_db,
+        tmp_path / "out",
+        BuildSnapshotConfig(
+            kg_snapshot_id="kg-snapshot-test",
+            built_at=NOW,
+            source_corpus_version="corpus-2026-06-01",
+            builder_run_id="run-1",
+            cts_probe_window_start="2026-05-31T00:00:00Z",
+            cts_probe_window_end=NOW,
+        ),
+    )
+
+    store = SQLiteSnapshotStore.open(result.snapshot_path, result.manifest_path)
+    try:
+        assert store.list_supported_providers() == ["cts"]
+        observation = store.get_latest_recall_observation(
+            "cts", "surface-python", "hash-python", "keyword"
+        )
+        assert observation is not None
+        assert observation["recall_bucket"] == "healthy"
+        assert observation["provider_api_version"] == "fake-v1"
+        assert store.list_surface_recall_observations("cts", "surface-python") == [
+            observation
+        ]
+        surface = store.get_surface_by_query_text("cts", "Python", "keyword")
+        assert surface is not None
+        assert surface["surface_id"] == "surface-python"
+    finally:
+        store.close()
