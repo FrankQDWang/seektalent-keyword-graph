@@ -113,7 +113,7 @@ class QueryRecallRecommendation(ContractModel):
     reason_code: ReasonCode
     reason: NonEmptyString
     provider: NonEmptyString
-    evidence_observation_ids: list[str] = Field(default_factory=list)
+    evidence_observation_ids: list[NonEmptyString] = Field(default_factory=list)
 
 
 class QueryRecallWarning(ContractModel):
@@ -185,3 +185,26 @@ class QueryRecallResponse(ContractModel):
     warnings: list[QueryRecallWarning]
     optimized_terms: list[OptimizedQueryTerm]
     lineage: QueryRecallLineage
+
+    @model_validator(mode="after")
+    def validate_recommendation_evidence_ids(self) -> QueryRecallResponse:
+        observation_ids = {
+            observation.observation_id for observation in self.input_observations
+        }
+        observation_ids.update(
+            alternative.observation.observation_id
+            for alternative in self.alternatives
+            if alternative.observation is not None
+        )
+        for recommendation in self.recommendations:
+            unknown_ids = [
+                observation_id
+                for observation_id in recommendation.evidence_observation_ids
+                if observation_id not in observation_ids
+            ]
+            if unknown_ids:
+                raise ValueError(
+                    "recommendation evidence_observation_ids must reference "
+                    "response observations"
+                )
+        return self

@@ -389,6 +389,7 @@
         },
         "evidence_observation_ids": {
           "items": {
+            "minLength": 1,
             "type": "string"
           },
           "title": "Evidence Observation Ids",

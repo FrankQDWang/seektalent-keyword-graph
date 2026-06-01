@@ -43,7 +43,7 @@ class BuildSnapshotConfig:
     healthy_min_total: int = 10
     healthy_max_total: int = 1000
     provider_sources: tuple[str, ...] | None = None
-    default_serving_provider: str = "cts"
+    default_serving_provider: str | None = "cts"
     cts_probe_window_start: str | None = None
     cts_probe_window_end: str | None = None
 
@@ -62,7 +62,7 @@ class BuildSnapshotConfig:
         healthy_min_total: int = 10,
         healthy_max_total: int = 1000,
         provider_sources: tuple[str, ...] | None = None,
-        default_serving_provider: str = "cts",
+        default_serving_provider: str | None = "cts",
     ) -> None:
         window_start = provider_probe_window_start or cts_probe_window_start
         window_end = provider_probe_window_end or cts_probe_window_end
@@ -161,7 +161,16 @@ def build_runtime_snapshot(
                 provider_sources,
             )
             _insert_policy_meta(snapshot_conn, config)
-            _project_surfaces(snapshot_conn, build_conn, config, latest_observations)
+            default_serving_provider = _resolve_default_serving_provider(
+                config, provider_sources
+            )
+            _project_surfaces(
+                snapshot_conn,
+                build_conn,
+                config,
+                latest_observations,
+                default_serving_provider,
+            )
             _copy_table(
                 snapshot_conn,
                 build_conn,
@@ -361,10 +370,11 @@ def _project_surfaces(
     build_conn: sqlite3.Connection,
     config: BuildSnapshotConfig,
     latest_observations: list[sqlite3.Row],
+    default_serving_provider: str,
 ) -> None:
     bucket_observation_by_surface: dict[str, sqlite3.Row] = {}
     for row in latest_observations:
-        if row["provider"] != config.default_serving_provider:
+        if row["provider"] != default_serving_provider:
             continue
         surface_id = str(row["surface_id"])
         current = bucket_observation_by_surface.get(surface_id)
@@ -501,6 +511,26 @@ def _resolve_provider_sources(
             f"configured={list(normalized)} exported={list(exported)}"
         )
     return normalized
+
+
+def _resolve_default_serving_provider(
+    config: BuildSnapshotConfig, provider_sources: tuple[str, ...]
+) -> str:
+    configured = config.default_serving_provider
+    if configured is None:
+        if len(provider_sources) == 1:
+            return provider_sources[0]
+        raise ValueError(
+            "default_serving_provider is required for multi-provider snapshots"
+        )
+    if configured in provider_sources:
+        return configured
+    if configured == "cts" and len(provider_sources) == 1:
+        return provider_sources[0]
+    raise ValueError(
+        "default_serving_provider must be one of provider_sources: "
+        f"default={configured!r} providers={list(provider_sources)!r}"
+    )
 
 
 def _observation_sort_key(row: sqlite3.Row) -> tuple[str, str]:

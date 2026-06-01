@@ -442,6 +442,9 @@ def test_build_snapshot_derives_provider_sources_from_exported_rows(
         assert observation is not None
         assert observation["observation_id"] == "obs-python-liepin"
         assert observation["provider_api_version"] == "liepin-v1"
+        surface = store.get_surface("surface-python")
+        assert surface is not None
+        assert surface["recall_bucket"] == "healthy"
     finally:
         store.close()
 

@@ -206,6 +206,23 @@ def test_nested_response_models_validate_public_contract() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "evidence_ids",
+    [[""], ["missing-observation"]],
+)
+def test_response_rejects_invalid_recommendation_observation_ids(
+    evidence_ids: list[str],
+) -> None:
+    payload = _response_payload()
+    recommendations = list(payload["recommendations"])
+    first_recommendation = dict(recommendations[0])
+    first_recommendation["evidence_observation_ids"] = evidence_ids
+    payload["recommendations"] = [first_recommendation]
+
+    with pytest.raises(ValidationError):
+        QueryRecallResponse.model_validate(payload)
+
+
 def test_query_recall_examples_validate_through_pydantic() -> None:
     request = json.loads((CONTRACT_DIR / "request.example.json").read_text())
     response = json.loads((CONTRACT_DIR / "response.example.json").read_text())
