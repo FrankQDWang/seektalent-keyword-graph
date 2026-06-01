@@ -38,22 +38,30 @@ SeekTalent should treat package, artifact, or snapshot validation failures as
 `SEEKTALENT_KEYWORD_GRAPH_FAIL_OPEN` is enabled.
 
 ```python
-from seektalent_keyword_graph import KeywordGraph
-from seektalent_keyword_graph.runtime.errors import SnapshotError
-
-
 def open_keyword_graph_or_unavailable(snapshot_path, manifest_path=None):
     try:
+        from seektalent_keyword_graph import KeywordGraph
+        from seektalent_keyword_graph.runtime.errors import SnapshotError
+
+        unavailable_errors = (ImportError, OSError, SnapshotError)
         return {
             "status": "ok",
             "graph": KeywordGraph.open(snapshot_path, manifest_path),
         }
-    except (ImportError, OSError, SnapshotError) as exc:
+    except ImportError as exc:
+        return {
+            "status": "keyword_graph_unavailable",
+            "reason": type(exc).__name__,
+        }
+    except unavailable_errors as exc:
         return {
             "status": "keyword_graph_unavailable",
             "reason": type(exc).__name__,
         }
 ```
+
+The effective unavailable exception set is `ImportError`, `OSError`, and
+`SnapshotError`.
 
 Missing package, missing snapshot, checksum mismatch, schema mismatch, or privacy
 scan failure all use the same fail-open status. Consumers may log `reason`, but

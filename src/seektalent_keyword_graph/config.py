@@ -31,17 +31,23 @@ class KeywordGraphRuntimeSettings(BaseModel):
         env = os.environ if environ is None else environ
         return cls(
             enabled=_parse_bool(
-                env.get("SEEKTALENT_KEYWORD_GRAPH_ENABLED"), default=True
+                env.get("SEEKTALENT_KEYWORD_GRAPH_ENABLED"),
+                default=True,
+                env_name="SEEKTALENT_KEYWORD_GRAPH_ENABLED",
             ),
             snapshot_path=_optional_path(
                 env.get("SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_PATH")
             ),
             snapshot_id=_optional_str(env.get("SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_ID")),
             fail_open=_parse_bool(
-                env.get("SEEKTALENT_KEYWORD_GRAPH_FAIL_OPEN"), default=True
+                env.get("SEEKTALENT_KEYWORD_GRAPH_FAIL_OPEN"),
+                default=True,
+                env_name="SEEKTALENT_KEYWORD_GRAPH_FAIL_OPEN",
             ),
             max_bundles=_parse_int(
-                env.get("SEEKTALENT_KEYWORD_GRAPH_MAX_BUNDLES"), default=5
+                env.get("SEEKTALENT_KEYWORD_GRAPH_MAX_BUNDLES"),
+                default=5,
+                env_name="SEEKTALENT_KEYWORD_GRAPH_MAX_BUNDLES",
             ),
             default_provider=(
                 _optional_str(
@@ -50,7 +56,9 @@ class KeywordGraphRuntimeSettings(BaseModel):
                 or "cts"
             ),
             max_alternatives=_parse_int(
-                env.get("SEEKTALENT_KEYWORD_GRAPH_MAX_ALTERNATIVES"), default=5
+                env.get("SEEKTALENT_KEYWORD_GRAPH_MAX_ALTERNATIVES"),
+                default=5,
+                env_name="SEEKTALENT_KEYWORD_GRAPH_MAX_ALTERNATIVES",
             ),
         )
 
@@ -69,7 +77,7 @@ def _optional_path(value: str | None) -> Path | None:
     return Path(stripped)
 
 
-def _parse_bool(value: str | None, *, default: bool) -> bool:
+def _parse_bool(value: str | None, *, default: bool, env_name: str) -> bool:
     stripped = _optional_str(value)
     if stripped is None:
         return default
@@ -78,11 +86,14 @@ def _parse_bool(value: str | None, *, default: bool) -> bool:
         return True
     if normalized in {"0", "false", "no", "off"}:
         return False
-    raise ValueError(f"invalid boolean value: {value!r}")
+    raise ValueError(f"{env_name} must be a boolean value, got {value!r}")
 
 
-def _parse_int(value: str | None, *, default: int) -> int:
+def _parse_int(value: str | None, *, default: int, env_name: str) -> int:
     stripped = _optional_str(value)
     if stripped is None:
         return default
-    return int(stripped)
+    try:
+        return int(stripped)
+    except ValueError as exc:
+        raise ValueError(f"{env_name} must be an integer value, got {value!r}") from exc

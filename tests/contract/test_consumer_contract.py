@@ -61,6 +61,30 @@ def test_runtime_settings_load_only_seektalent_keyword_graph_env() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("env_name", "env_value"),
+    [
+        ("SEEKTALENT_KEYWORD_GRAPH_ENABLED", "maybe"),
+        ("SEEKTALENT_KEYWORD_GRAPH_MAX_BUNDLES", "many"),
+    ],
+)
+def test_runtime_settings_parse_errors_name_env_var(
+    env_name: str,
+    env_value: str,
+) -> None:
+    from seektalent_keyword_graph.config import KeywordGraphRuntimeSettings
+
+    env = _GuardedEnv(
+        {
+            env_name: env_value,
+            "KEYWORD_GRAPH_CTS_API_KEY": "must-not-be-read",
+        }
+    )
+
+    with pytest.raises(ValueError, match=env_name):
+        KeywordGraphRuntimeSettings.from_env(env)
+
+
 def test_sample_consumer_uses_public_runtime_facade_only(
     fixture_flow_result: Any,
 ) -> None:
@@ -103,9 +127,7 @@ def test_fail_open_adapter_represents_missing_graph_as_unavailable(
     missing_snapshot_result = _documented_fail_open_adapter(missing_snapshot)
     missing_package_result = _documented_fail_open_adapter(
         missing_snapshot,
-        open_graph=lambda _snapshot, _manifest: (_ for _ in ()).throw(
-            ImportError("package missing")
-        ),
+        import_keyword_graph=lambda: (_ for _ in ()).throw(ImportError("missing")),
     )
 
     assert missing_snapshot_result == {
@@ -118,8 +140,14 @@ def test_fail_open_adapter_represents_missing_graph_as_unavailable(
     }
 
     docs = (DOCS_DIR / "seektalent-integration.md").read_text(encoding="utf-8")
+    fail_open_example = docs.split("## Fail Open", maxsplit=1)[1].split(
+        "```", maxsplit=2
+    )[1]
     assert "keyword_graph_unavailable" in docs
-    assert "except (ImportError, OSError, SnapshotError)" in docs
+    assert "try:\n        from seektalent_keyword_graph import KeywordGraph" in (
+        fail_open_example
+    )
+    assert "ImportError`, `OSError`, and\n`SnapshotError" in docs
 
 
 def test_contract_examples_are_fixture_derived_and_provider_aware() -> None:
@@ -304,11 +332,18 @@ def _documented_fail_open_adapter(
     snapshot_path: Path,
     manifest_path: Path | None = None,
     *,
-    open_graph: Any = KeywordGraph.open,
+    import_keyword_graph: Any = lambda: KeywordGraph,
 ) -> dict[str, str]:
     try:
-        open_graph(snapshot_path, manifest_path)
-    except (ImportError, OSError, SnapshotError) as exc:
+        graph_cls = import_keyword_graph()
+        unavailable_errors = (ImportError, OSError, SnapshotError)
+        graph_cls.open(snapshot_path, manifest_path)
+    except ImportError as exc:
+        return {
+            "status": "keyword_graph_unavailable",
+            "reason": type(exc).__name__,
+        }
+    except unavailable_errors as exc:
         return {
             "status": "keyword_graph_unavailable",
             "reason": type(exc).__name__,
