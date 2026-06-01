@@ -140,6 +140,20 @@ def test_runtime_import_paths_do_not_read_cts_environment() -> None:
     assert offenders == []
 
 
+def test_runtime_modules_do_not_bypass_snapshot_store_query_methods() -> None:
+    offenders = []
+    for path in runtime_import_boundary_paths():
+        if path.name == "snapshot_store.py":
+            continue
+        source = path.read_text(encoding="utf-8")
+        if "store.connection" in source or ".connection.execute" in source:
+            offenders.append(
+                f"{path.relative_to(PROJECT_ROOT)} accesses SQLite connection directly"
+            )
+
+    assert offenders == []
+
+
 def test_domain_import_paths_do_not_reach_runtime_builder_or_cts() -> None:
     blocked_prefixes = (
         "seektalent_keyword_graph.runtime",

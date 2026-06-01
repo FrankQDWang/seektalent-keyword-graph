@@ -37,12 +37,25 @@ def _make_snapshot(path: Path) -> None:
             ("surface:docker", "Docker", "healthy"),
             ("surface:react", "React", "zero"),
             ("surface:react-js", "React.js", "healthy"),
+            ("surface:terraform", "Terraform", "zero"),
             ("surface:kafka", "Kafka", "stale"),
             ("surface:apache-kafka", "Apache Kafka", "healthy"),
+            ("surface:rails", "Rails", "zero"),
+            ("surface:ruby-on-rails", "Ruby on Rails", "healthy"),
             ("surface:llmops", "LLMOps", "unknown"),
             ("surface:vector-search", "Vector Search", "healthy"),
+            ("surface:aaa-low-quality", "Aaa Low Quality", "healthy"),
+            ("surface:zzz-high-quality", "Zzz High Quality", "healthy"),
         ]:
             classification = classify_surface(text)
+            quality_overrides = {
+                "surface:aaa-low-quality": (0.88, 0.12),
+                "surface:zzz-high-quality": (0.08, 0.94),
+            }
+            ambiguity_score, specificity_score = quality_overrides.get(
+                surface_id,
+                (classification.ambiguity_score, classification.specificity_score),
+            )
             conn.execute(
                 """
                 insert into surfaces(
@@ -61,8 +74,8 @@ def _make_snapshot(path: Path) -> None:
                     classification.token_class,
                     int(classification.query_safe),
                     int(classification.is_exact_phrase_preferred),
-                    classification.ambiguity_score,
-                    classification.specificity_score,
+                    ambiguity_score,
+                    specificity_score,
                     10,
                     20,
                     bucket,
@@ -81,7 +94,15 @@ def _make_snapshot(path: Path) -> None:
             ),
             ("concept:docker", "Docker", "tool", "surface:docker", 0.94),
             ("concept:react", "React", "framework", "surface:react", 0.93),
+            ("concept:terraform", "Terraform", "tool", "surface:terraform", 0.91),
             ("concept:kafka", "Kafka", "tool", "surface:kafka", 0.94),
+            (
+                "concept:rails",
+                "Ruby on Rails",
+                "framework",
+                "surface:ruby-on-rails",
+                0.92,
+            ),
             ("concept:llmops", "LLMOps", "method", "surface:llmops", 0.76),
             (
                 "concept:vector-search",
@@ -89,6 +110,20 @@ def _make_snapshot(path: Path) -> None:
                 "method",
                 "surface:vector-search",
                 0.9,
+            ),
+            (
+                "concept:low-quality",
+                "Aaa Low Quality",
+                "skill",
+                "surface:aaa-low-quality",
+                0.62,
+            ),
+            (
+                "concept:high-quality",
+                "Zzz High Quality",
+                "skill",
+                "surface:zzz-high-quality",
+                0.97,
             ),
         ]
         for concept_id, label, concept_type, primary_surface_id, confidence in concepts:
@@ -133,12 +168,21 @@ def _make_snapshot(path: Path) -> None:
             insert into concept_surfaces(
               concept_id, surface_id, confidence, source, status
             )
+            values ('concept:rails', 'surface:rails', 0.88, 'fixture', 'active')
+            """
+        )
+        conn.execute(
+            """
+            insert into concept_surfaces(
+              concept_id, surface_id, confidence, source, status
+            )
             values ('concept:kafka', 'surface:apache-kafka', 0.9, 'fixture', 'active')
             """
         )
         for relation_id, from_id, to_id in [
             ("relation:react-alias", "surface:react", "surface:react-js"),
             ("relation:kafka-alias", "surface:kafka", "surface:apache-kafka"),
+            ("relation:rails-reverse-alias", "surface:ruby-on-rails", "surface:rails"),
         ]:
             conn.execute(
                 """
@@ -166,10 +210,15 @@ def _make_snapshot(path: Path) -> None:
             ("surface:docker", 60, "ok", "2026-05-01T00:00:00Z"),
             ("surface:react", 0, "ok", "2026-05-01T00:00:00Z"),
             ("surface:react-js", 50, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:terraform", 0, "ok", "2026-05-01T00:00:00Z"),
             ("surface:kafka", 80, "ok", "2025-01-01T00:00:00Z"),
             ("surface:apache-kafka", 55, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:rails", 0, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:ruby-on-rails", 48, "ok", "2026-05-01T00:00:00Z"),
             ("surface:llmops", None, "unknown", "2026-05-01T00:00:00Z"),
             ("surface:vector-search", 35, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:aaa-low-quality", 28, "ok", "2026-05-01T00:00:00Z"),
+            ("surface:zzz-high-quality", 29, "ok", "2026-05-01T00:00:00Z"),
         ]:
             conn.execute(
                 """

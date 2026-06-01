@@ -108,6 +108,16 @@ class SQLiteSnapshotStore:
     def get_concept(self, concept_id: str) -> dict[str, object] | None:
         return self._fetch_one("select * from concepts where concept_id = ?", (concept_id,))
 
+    def list_active_surfaces(self) -> list[dict[str, object]]:
+        return self._fetch_all(
+            """
+            select * from surfaces
+            where serving_status = 'active'
+            order by length(text_norm) desc, text_norm
+            """,
+            (),
+        )
+
     def list_concept_surfaces(self, concept_id: str) -> list[dict[str, object]]:
         return self._fetch_all(
             "select * from concept_surfaces where concept_id = ? order by confidence desc, surface_id",
@@ -133,6 +143,21 @@ class SQLiteSnapshotStore:
             "select * from surface_relations where from_surface_id = ? and relation_type = ? "
             "and status = 'active' order by confidence desc, to_surface_id",
             (surface_id, relation_type),
+        )
+
+    def list_bidirectional_related_surfaces(
+        self, surface_id: str, relation_types: tuple[str, ...]
+    ) -> list[dict[str, object]]:
+        placeholders = ", ".join("?" for _ in relation_types)
+        return self._fetch_all(
+            f"""
+            select * from surface_relations
+            where (from_surface_id = ? or to_surface_id = ?)
+            and relation_type in ({placeholders})
+            and status = 'active'
+            order by confidence desc, relation_id
+            """,
+            (surface_id, surface_id, *relation_types),
         )
 
     def list_cooccurrence_edges(self, surface_id: str) -> list[dict[str, object]]:

@@ -30,13 +30,17 @@ class BundleBuilder:
                     _strength_for_bundle(selection, bundle.label),
                     _source_order_for_bundle(selection, bundle.label),
                     bundle.label,
+                    **_quality_for_bundle(selection, bundle.label),
                 )
             ),
-        )[:max_query_bundles]
+        )
+        deduped_bundles = _dedupe_by_executable_query(sorted_bundles)[
+            :max_query_bundles
+        ]
 
         return [
             bundle.model_copy(update={"priority": index})
-            for index, bundle in enumerate(sorted_bundles, start=1)
+            for index, bundle in enumerate(deduped_bundles, start=1)
         ]
 
     def _bundle_for_selected(self, selected: SelectedSurface) -> QueryBundle:
@@ -152,12 +156,23 @@ class BundleBuilder:
         )
 
     def _fallback_bundles(self, selection: SelectionResult) -> list[QueryBundle]:
-        terms = selection.resolution.no_match_terms
-        if not terms:
-            terms = []
+        terms = list(selection.resolution.no_match_terms)
+        rejected_norms = {
+            rejection.normalized_surface for rejection in selection.rejected_surfaces
+        }
+        terms.extend(
+            term
+            for term in selection.resolution.matched_terms
+            if term.normalized_surface in rejected_norms
+        )
         if not terms:
             return []
         first = terms[0]
+        warnings = ["fallback"]
+        if first.normalized_surface in {
+            term.normalized_surface for term in selection.resolution.no_match_terms
+        }:
+            warnings.insert(0, "no_match")
         return [
             QueryBundle(
                 bundle_type="fallback",
@@ -179,7 +194,7 @@ class BundleBuilder:
                 ),
                 priority=1,
                 source_concept_ids=[],
-                warnings=["no_match", "fallback"],
+                warnings=warnings,
             )
         ]
 
@@ -202,6 +217,18 @@ def _source_order_for_bundle(selection: SelectionResult, label: str) -> int:
     return selected.term.source_order
 
 
+def _quality_for_bundle(selection: SelectionResult, label: str) -> dict[str, float]:
+    selected = _selected_for_label(selection, label)
+    if selected is None:
+        return {}
+    return {
+        "confidence": float(selected.term.confidence),
+        "specificity_score": float(selected.term.surface["specificity_score"]),
+        "ambiguity_score": float(selected.term.surface["ambiguity_score"]),
+        "stability_score": float(selected.term.concept["stability_score"]),
+    }
+
+
 def _selected_for_label(
     selection: SelectionResult, label: str
 ) -> SelectedSurface | None:
@@ -210,3 +237,17 @@ def _selected_for_label(
         if label.startswith(f"{display} "):
             return selected
     return None
+
+
+def _dedupe_by_executable_query(bundles: list[QueryBundle]) -> list[QueryBundle]:
+    deduped: list[QueryBundle] = []
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    for bundle in bundles:
+        identity = tuple(
+            (query.query_mode, query.query_text) for query in bundle.queries
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        deduped.append(bundle)
+    return deduped

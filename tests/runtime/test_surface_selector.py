@@ -39,7 +39,7 @@ def test_surface_selector_assigns_bundle_routes_and_warnings(
     ]
 
 
-def test_surface_selector_rejects_too_wide_without_companion(
+def test_surface_selector_uses_graph_derived_companion_for_too_wide_surface(
     snapshot_store: SQLiteSnapshotStore,
 ) -> None:
     request = QueryPlanRequest(
@@ -50,8 +50,47 @@ def test_surface_selector_rejects_too_wide_without_companion(
 
     selection = SurfaceSelector(snapshot_store).select(resolution)
 
-    assert selection.selected == []
+    assert len(selection.selected) == 1
+    selected = selection.selected[0]
+    assert selected.bundle_type == "precision"
+    assert selected.normalized_surface == "kubernetes"
+    assert selected.companions[0].normalized_surface == "docker"
+    assert selected.companions[0].source == "requirement"
+    assert selection.rejected_surfaces == []
+
+
+def test_surface_selector_promotes_preferred_healthy_free_text_to_anchor(
+    snapshot_store: SQLiteSnapshotStore,
+) -> None:
+    request = QueryPlanRequest(
+        request_id="req-title-anchor",
+        requirement_terms=[],
+        title="Senior Python engineer",
+    )
+    resolution = ConceptResolver(snapshot_store).resolve(request)
+
+    selection = SurfaceSelector(snapshot_store).select(resolution)
+
     assert [
-        (rejection.normalized_surface, rejection.reason_code)
-        for rejection in selection.rejected_surfaces
-    ] == [("kubernetes", "too_wide_without_companion")]
+        (surface.normalized_surface, surface.bundle_type)
+        for surface in selection.selected
+    ] == [("python", "anchor")]
+    assert selection.rejected_surfaces == []
+
+
+def test_surface_selector_finds_alias_relations_bidirectionally(
+    snapshot_store: SQLiteSnapshotStore,
+) -> None:
+    request = QueryPlanRequest(
+        request_id="req-reverse-alias",
+        requirement_terms=[{"text": "Rails", "strength": "required"}],
+    )
+    resolution = ConceptResolver(snapshot_store).resolve(request)
+
+    selection = SurfaceSelector(snapshot_store).select(resolution)
+
+    assert len(selection.selected) == 1
+    selected = selection.selected[0]
+    assert selected.bundle_type == "alias_probe"
+    assert selected.normalized_surface == "rails"
+    assert selected.aliases[0].normalized_surface == "ruby on rails"

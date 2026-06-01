@@ -7,6 +7,7 @@ import json
 
 from seektalent_keyword_graph.contracts import (
     ConceptSheetRow,
+    QueryBundle,
     QueryPlanLineage,
     QueryPlanRequest,
     QueryPlanResponse,
@@ -37,11 +38,7 @@ class QueryPlanner:
         resolution = ConceptResolver(self.store).resolve(request)
         selection = SurfaceSelector(self.store).select(resolution)
         bundles = BundleBuilder().build(selection, request.max_query_bundles)
-        fallback_terms = [
-            term.text
-            for term in resolution.no_match_terms
-            if any(bundle.bundle_type == "fallback" for bundle in bundles)
-        ]
+        fallback_terms = _fallback_terms(bundles)
 
         return QueryPlanResponse(
             schema_version="query-plan-response-v1",
@@ -149,3 +146,13 @@ def _input_hash(request: QueryPlanRequest) -> str:
     payload = request.model_dump(mode="json")
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def _fallback_terms(bundles: list[QueryBundle]) -> list[str]:
+    terms: list[str] = []
+    for bundle in bundles:
+        if bundle.bundle_type != "fallback":
+            continue
+        for query in bundle.queries:
+            terms.extend(query.surfaces)
+    return terms

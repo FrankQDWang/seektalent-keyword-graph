@@ -230,14 +230,7 @@ class ConceptResolver:
         return sources
 
     def _active_surfaces_by_length(self) -> list[dict[str, Any]]:
-        rows = self.store.connection.execute(
-            """
-            select * from surfaces
-            where serving_status = 'active'
-            order by length(text_norm) desc, text_norm
-            """
-        ).fetchall()
-        return [dict(row) for row in rows]
+        return self.store.list_active_surfaces()
 
     def _best_active_concept_link(self, surface_id: str) -> dict[str, Any] | None:
         for link in self.store.list_surface_concepts(surface_id):

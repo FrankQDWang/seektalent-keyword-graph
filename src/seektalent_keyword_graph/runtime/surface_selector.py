@@ -19,6 +19,15 @@ from seektalent_keyword_graph.runtime.concept_resolver import (
 )
 from seektalent_keyword_graph.runtime.snapshot_store import SQLiteSnapshotStore
 
+_ALIAS_PROBE_RELATION_TYPES = (
+    "alias",
+    "abbreviation",
+    "translation",
+    "version_variant",
+)
+_MIN_COMPANION_SUPPORT = 0.5
+_MIN_COMPANION_PMI = 1.0
+
 
 @dataclass(frozen=True)
 class RelatedSurface:
@@ -63,7 +72,7 @@ class SurfaceSelector:
 
         for term in resolution.matched_terms:
             bucket = str(term.surface["recall_bucket"])
-            if bucket in ANCHOR_RECALL_BUCKETS and term.strength == "required":
+            if bucket in ANCHOR_RECALL_BUCKETS:
                 selected.append(SelectedSurface(term=term, bundle_type="anchor"))
                 continue
             if bucket == "too_wide":
@@ -119,6 +128,19 @@ class SurfaceSelector:
                     )
                 continue
             if bucket in EXPLORATION_RECALL_BUCKETS:
+                if not resolution.request.include_exploration:
+                    rejections.append(
+                        RejectedSurface(
+                            surface_text=term.text,
+                            normalized_surface=term.normalized_surface,
+                            reason_code="policy_blocked",
+                            source=term.source,
+                            evidence=(
+                                "Exploration bundles are disabled for this request."
+                            ),
+                        )
+                    )
+                    continue
                 selected.append(
                     SelectedSurface(
                         term=term,
@@ -164,23 +186,31 @@ class SurfaceSelector:
     def _companions(
         self, term: ResolvedTerm, matched_terms: list[ResolvedTerm]
     ) -> list[ResolvedTerm]:
-        edge_ids = {
+        surface_id = str(term.surface["surface_id"])
+        edge_companion_ids = {
             str(edge["surface_id_b"])
-            if str(edge["surface_id_a"]) == str(term.surface["surface_id"])
+            if str(edge["surface_id_a"]) == surface_id
             else str(edge["surface_id_a"])
-            for edge in self.store.list_cooccurrence_edges(
-                str(term.surface["surface_id"])
-            )
+            for edge in self.store.list_cooccurrence_edges(surface_id)
+            if _is_strong_cooccurrence(edge)
         }
-        companions = [
-            other
+        companion_by_surface_id = {
+            str(other.surface["surface_id"]): other
             for other in matched_terms
             if other.normalized_surface != term.normalized_surface
-            and str(other.surface["surface_id"]) in edge_ids
+            and str(other.surface["surface_id"]) in edge_companion_ids
             and str(other.surface["recall_bucket"]) == "healthy"
-        ]
+            and bool(other.surface["query_safe"])
+        }
+        for companion_id in edge_companion_ids:
+            if companion_id in companion_by_surface_id:
+                continue
+            companion = self._graph_companion(term, companion_id)
+            if companion is not None:
+                companion_by_surface_id[companion_id] = companion
+
         return sorted(
-            companions,
+            companion_by_surface_id.values(),
             key=lambda other: (
                 -float(other.confidence),
                 other.source_order,
@@ -190,11 +220,19 @@ class SurfaceSelector:
 
     def _aliases(self, term: ResolvedTerm) -> list[RelatedSurface]:
         aliases: list[RelatedSurface] = []
-        for relation in self.store.list_related_surfaces(
-            str(term.surface["surface_id"]), "alias"
+        surface_id = str(term.surface["surface_id"])
+        for relation in self.store.list_bidirectional_related_surfaces(
+            surface_id, _ALIAS_PROBE_RELATION_TYPES
         ):
-            surface = self.store.get_surface(str(relation["to_surface_id"]))
+            related_surface_id = (
+                str(relation["to_surface_id"])
+                if str(relation["from_surface_id"]) == surface_id
+                else str(relation["from_surface_id"])
+            )
+            surface = self.store.get_surface(related_surface_id)
             if surface is None or str(surface["serving_status"]) != "active":
+                continue
+            if not bool(surface["query_safe"]):
                 continue
             concept = self._best_concept(str(surface["surface_id"]))
             aliases.append(
@@ -211,10 +249,44 @@ class SurfaceSelector:
             key=lambda alias: (-alias.confidence, alias.normalized_surface),
         )
 
+    def _graph_companion(
+        self, term: ResolvedTerm, companion_surface_id: str
+    ) -> ResolvedTerm | None:
+        surface = self.store.get_surface(companion_surface_id)
+        if surface is None or str(surface["serving_status"]) != "active":
+            return None
+        if str(surface["recall_bucket"]) != "healthy" or not bool(
+            surface["query_safe"]
+        ):
+            return None
+        link = self._best_active_concept_link(companion_surface_id)
+        if link is None:
+            return None
+        concept = self.store.get_concept(str(link["concept_id"]))
+        if concept is None:
+            return None
+        return ResolvedTerm(
+            text=str(surface["display_text"]),
+            normalized_surface=str(surface["text_norm"]),
+            source=term.source,
+            strength="preferred",
+            source_order=term.source_order,
+            surface=surface,
+            concept=concept,
+            confidence=float(link["confidence"]),
+            source_ref=f"graph_cooccurrence:{surface['text_norm']}",
+        )
+
     def _best_concept(self, surface_id: str) -> dict[str, Any] | None:
+        link = self._best_active_concept_link(surface_id)
+        if link is not None:
+            return self.store.get_concept(str(link["concept_id"]))
+        return None
+
+    def _best_active_concept_link(self, surface_id: str) -> dict[str, Any] | None:
         for link in self.store.list_surface_concepts(surface_id):
             if str(link["status"]) == "active":
-                return self.store.get_concept(str(link["concept_id"]))
+                return link
         return None
 
 
@@ -223,3 +295,10 @@ def _warning_message(code: str) -> str:
         "stale_observation": "Selected surface has a stale recall observation.",
         "unknown_observation": "Selected surface has an unknown recall observation.",
     }[code]
+
+
+def _is_strong_cooccurrence(edge: dict[str, Any]) -> bool:
+    return (
+        float(edge["support"]) >= _MIN_COMPANION_SUPPORT
+        and float(edge["pmi"]) >= _MIN_COMPANION_PMI
+    )

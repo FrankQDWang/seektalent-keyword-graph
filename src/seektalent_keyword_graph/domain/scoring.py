@@ -16,12 +16,21 @@ def bundle_sort_key(
     requirement_strength: str,
     source_order: int,
     label: str,
-) -> tuple[int, int, int, str]:
+    *,
+    confidence: float = 0.0,
+    specificity_score: float = 0.0,
+    ambiguity_score: float = 1.0,
+    stability_score: float = 0.0,
+) -> tuple[int, int, int, float, float, float, float, str]:
     """Return the stable sort key used before max-bundle trimming."""
     return (
         BUNDLE_TYPE_RANK[bundle_type],
         STRENGTH_RANK.get(requirement_strength, 99),
         source_order,
+        -confidence,
+        -specificity_score,
+        ambiguity_score,
+        -stability_score,
         label.casefold(),
     )
 

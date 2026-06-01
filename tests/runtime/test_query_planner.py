@@ -35,9 +35,9 @@ def test_query_planner_response_is_deterministic_and_has_lineage(
     assert first.selection_policy_version == "policy-v1"
     assert [bundle.bundle_type for bundle in first.query_bundles] == [
         "anchor",
+        "anchor",
+        "anchor",
         "precision",
-        "alias_probe",
-        "alias_probe",
     ]
     assert len(first.query_bundles) == 4
     assert first.lineage.input_hash.startswith("sha256:")
@@ -103,6 +103,40 @@ def test_query_planner_warns_when_fallback_is_used(
         ("no_match", ["GraphQL"]),
         ("fallback", ["GraphQL"]),
     ]
+
+
+def test_query_planner_warns_when_fallback_uses_safe_matched_term(
+    snapshot_store: SQLiteSnapshotStore,
+) -> None:
+    request = QueryPlanRequest(
+        request_id="req-safe-matched-fallback",
+        requirement_terms=[{"text": "Terraform", "strength": "required"}],
+    )
+
+    response = KeywordGraph(snapshot_store).build_query_plan(request)
+
+    assert [bundle.bundle_type for bundle in response.query_bundles] == ["fallback"]
+    assert response.query_bundles[0].queries[0].query_text == '"Terraform"'
+    assert [(warning.code, warning.source_terms) for warning in response.warnings] == [
+        ("fallback", ["Terraform"])
+    ]
+
+
+def test_query_planner_honors_include_exploration_false(
+    snapshot_store: SQLiteSnapshotStore,
+) -> None:
+    request = QueryPlanRequest(
+        request_id="req-no-exploration",
+        requirement_terms=[{"text": "LLMOps", "strength": "required"}],
+        include_exploration=False,
+    )
+
+    response = KeywordGraph(snapshot_store).build_query_plan(request)
+
+    assert [bundle.bundle_type for bundle in response.query_bundles] == ["fallback"]
+    assert response.query_bundles[0].queries[0].query_text == '"LLMOps"'
+    assert all(bundle.bundle_type != "exploration" for bundle in response.query_bundles)
+    assert "unknown_observation" not in {warning.code for warning in response.warnings}
 
 
 def test_keyword_graph_open_and_planning_do_not_read_cts_env_vars(
