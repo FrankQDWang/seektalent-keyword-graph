@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
+import threading
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -15,6 +18,7 @@ from seektalent_keyword_graph.cts.probe_window import (
     REAL_CTS_GATE_TOKEN,
     RealProbeGateError,
 )
+from seektalent_keyword_graph.cts.rate_limit import CtsProbeRateLimitConfig
 from seektalent_keyword_graph.cts.retry import RetryPolicy
 
 NOW = datetime(2026, 6, 1, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
@@ -28,6 +32,65 @@ class RecordingClient:
     def count(self, query_text: str, query_mode: str = "keyword") -> CtsCountResult:
         self.requests.append((query_text, query_mode))
         return self.results.pop(0)
+
+
+class TrackingClient:
+    def __init__(self, total: int, sleep_seconds: float = 0.0) -> None:
+        self._remaining = total
+        self._sleep_seconds = sleep_seconds
+        self._lock = threading.Lock()
+        self.active = 0
+        self.max_active = 0
+        self.started_at: list[float] = []
+
+    def count(self, query_text: str, query_mode: str = "keyword") -> CtsCountResult:
+        with self._lock:
+            self._remaining -= 1
+            total = self._remaining
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            self.started_at.append(time.monotonic())
+        try:
+            if self._sleep_seconds:
+                time.sleep(self._sleep_seconds)
+            return CtsCountResult(status="ok", total=total)
+        finally:
+            with self._lock:
+                self.active -= 1
+
+
+class BlockingClient:
+    def __init__(self, results: list[CtsCountResult]) -> None:
+        self.results = results
+        self.started: list[str] = []
+        self.release = threading.Event()
+        self._lock = threading.Lock()
+
+    def count(self, query_text: str, query_mode: str = "keyword") -> CtsCountResult:
+        with self._lock:
+            self.started.append(query_text)
+            result = self.results.pop(0)
+        self.release.wait(timeout=0.05)
+        return result
+
+
+class LeaseCheckingClient:
+    def __init__(self, db_path: Path) -> None:
+        self.db_path = db_path
+        self.seen_statuses: list[str] = []
+
+    def count(self, query_text: str, query_mode: str = "keyword") -> CtsCountResult:
+        connection = sqlite3.connect(self.db_path)
+        try:
+            row = connection.execute(
+                "select status from probe_jobs where query_text = ? and query_mode = ?",
+                (query_text, query_mode),
+            ).fetchone()
+        finally:
+            connection.close()
+        assert row is not None
+        self.seen_statuses.append(str(row[0]))
+        return CtsCountResult(status="ok", total=1)
 
 
 @pytest.fixture
@@ -90,6 +153,40 @@ def write_gate(tmp_path: Path, first_line: str = REAL_CTS_GATE_TOKEN) -> Path:
     return gate_file
 
 
+def test_run_due_jobs_enforces_real_gate_before_any_network_like_call(
+    store: BuildStore,
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    CtsProbeRunner(store, config(mode="dry_run")).schedule_active_surfaces()
+    client = RecordingClient([CtsCountResult(status="ok", total=1)])
+    runner = CtsProbeRunner(
+        store,
+        config(mode="real", credentials=credentials()),
+        client=client,
+    )
+
+    with pytest.raises(RealProbeGateError, match="gate file"):
+        runner.run_due_jobs()
+
+    assert client.requests == []
+
+
+def test_schedule_active_surfaces_enforces_real_gate_before_enqueue(
+    store: BuildStore,
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    runner = CtsProbeRunner(
+        store,
+        config(mode="real", credentials=credentials()),
+        client=RecordingClient([CtsCountResult(status="ok", total=1)]),
+    )
+
+    with pytest.raises(RealProbeGateError, match="gate file"):
+        runner.schedule_active_surfaces()
+
+    assert store.list_probe_jobs("surface-python") == []
+
+
 def test_fake_dry_run_persists_observations_and_probe_job_status(
     store: BuildStore,
 ) -> None:
@@ -105,7 +202,8 @@ def test_fake_dry_run_persists_observations_and_probe_job_status(
     observation = store.list_observations("surface-python")[0]
     assert observation["status"] == "ok"
     assert observation["total"] == 42
-    assert observation["query_mode"] == "dry_run"
+    assert observation["query_mode"] == "keyword"
+    assert client.requests[0].query_mode == "keyword"
 
 
 def test_real_mode_requires_gate_file_before_running(store: BuildStore) -> None:
@@ -154,8 +252,248 @@ def test_real_mode_with_valid_gate_credentials_and_window_uses_injected_client(
     summary = runner.schedule_and_run()
 
     assert summary.completed == 1
-    assert client.requests == [("Python", "real")]
+    assert client.requests == [("Python", "keyword")]
     assert store.list_observations("surface-python")[0]["total"] == 7
+
+
+def test_runner_serializes_cts_calls_to_preserve_auth_accounting(
+    store: BuildStore,
+) -> None:
+    for name in ("Python", "Java", "SQL", "Kafka"):
+        insert_surface(store, f"surface-{name.lower()}", name)
+    client = TrackingClient(total=4, sleep_seconds=0.02)
+    runner = CtsProbeRunner(
+        store,
+        config(
+            mode="dry_run",
+            rate_limit=CtsProbeRateLimitConfig(
+                requests_per_second=1000.0, concurrency=2
+            ),
+        ),
+        client=client,
+    )
+
+    summary = runner.schedule_and_run()
+
+    assert summary.completed == 4
+    assert client.max_active == 1
+
+
+def test_runner_applies_configured_rps_spacing(store: BuildStore) -> None:
+    for name in ("Python", "Java", "SQL"):
+        insert_surface(store, f"surface-{name.lower()}", name)
+    client = TrackingClient(total=3)
+    runner = CtsProbeRunner(
+        store,
+        config(
+            mode="dry_run",
+            rate_limit=CtsProbeRateLimitConfig(requests_per_second=20.0, concurrency=3),
+        ),
+        client=client,
+    )
+
+    summary = runner.schedule_and_run()
+
+    assert summary.completed == 3
+    start_gaps = [
+        right - left
+        for left, right in zip(client.started_at, client.started_at[1:], strict=False)
+    ]
+    assert min(start_gaps) >= 0.035
+
+
+def test_schedule_skips_existing_open_probe_job_without_observation(
+    store: BuildStore,
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    first_runner = CtsProbeRunner(store, config(mode="dry_run", now=NOW))
+    second_runner = CtsProbeRunner(
+        store, config(mode="dry_run", now=NOW + timedelta(minutes=5))
+    )
+
+    first_summary = first_runner.schedule_active_surfaces()
+    second_summary = second_runner.schedule_active_surfaces()
+
+    assert first_summary == (1, 0)
+    assert second_summary == (0, 0)
+    jobs = store.list_probe_jobs("surface-python")
+    assert len(jobs) == 1
+    assert jobs[0]["status"] == "scheduled"
+
+
+def test_runner_leases_due_jobs_before_counting(store: BuildStore) -> None:
+    insert_surface(store, "surface-python", "Python")
+    client = LeaseCheckingClient(store.path)
+    runner = CtsProbeRunner(store, config(mode="dry_run"), client=client)
+
+    summary = runner.schedule_and_run()
+
+    assert summary.completed == 1
+    assert client.seen_statuses == ["running"]
+    assert store.list_probe_jobs("surface-python")[0]["status"] == "succeeded"
+
+
+def test_dry_run_runner_does_not_execute_real_pending_job(
+    store: BuildStore, tmp_path: Path
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    CtsProbeRunner(
+        store,
+        config(
+            mode="real",
+            gate_file=write_gate(tmp_path),
+            credentials=credentials(),
+        ),
+    ).schedule_active_surfaces()
+    dry_client = RecordingClient([CtsCountResult(status="ok", total=1)])
+
+    summary = CtsProbeRunner(
+        store,
+        config(mode="dry_run"),
+        client=dry_client,
+    ).run_due_jobs()
+
+    assert summary.completed == 0
+    assert dry_client.requests == []
+    assert store.list_probe_jobs("surface-python")[0]["status"] == "scheduled"
+
+
+def test_auth_error_with_configured_concurrency_records_started_calls_before_pausing(
+    store: BuildStore,
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    insert_surface(store, "surface-java", "Java")
+    insert_surface(store, "surface-sql", "SQL")
+    client = BlockingClient(
+        [
+            CtsCountResult(status="auth_error", error_code="auth_error"),
+            CtsCountResult(status="ok", total=2),
+            CtsCountResult(status="ok", total=3),
+        ]
+    )
+    runner = CtsProbeRunner(
+        store,
+        config(
+            mode="dry_run",
+            rate_limit=CtsProbeRateLimitConfig(
+                requests_per_second=1000.0, concurrency=3
+            ),
+        ),
+        client=client,
+    )
+
+    summary = runner.schedule_and_run()
+
+    assert summary.auth_paused == 1
+    assert client.started == ["Java"]
+    observations = [
+        row["query_text"]
+        for surface_id in ("surface-java", "surface-python", "surface-sql")
+        for row in store.list_observations(surface_id)
+    ]
+    assert observations == ["Java"]
+
+
+def test_auth_error_after_prior_success_does_not_drop_started_call_accounting(
+    store: BuildStore,
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    insert_surface(store, "surface-java", "Java")
+    insert_surface(store, "surface-sql", "SQL")
+    client = BlockingClient(
+        [
+            CtsCountResult(status="ok", total=1),
+            CtsCountResult(status="auth_error", error_code="auth_error"),
+            CtsCountResult(status="ok", total=3),
+        ]
+    )
+    runner = CtsProbeRunner(
+        store,
+        config(
+            mode="dry_run",
+            rate_limit=CtsProbeRateLimitConfig(
+                requests_per_second=1000.0, concurrency=3
+            ),
+        ),
+        client=client,
+    )
+
+    summary = runner.schedule_and_run()
+
+    assert summary.completed == 1
+    assert summary.auth_paused == 1
+    assert client.started == ["Java", "Python"]
+    observations = {
+        row["query_text"]: row["status"]
+        for surface_id in ("surface-java", "surface-python", "surface-sql")
+        for row in store.list_observations(surface_id)
+    }
+    assert observations == {"Java": "ok", "Python": "auth_error"}
+
+
+def test_auth_pause_is_scoped_to_matching_mode_and_api_bucket(
+    store: BuildStore, tmp_path: Path
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    CtsProbeRunner(store, config(mode="dry_run")).schedule_active_surfaces()
+    v2_credentials = CtsClientConfig(
+        base_url="https://cts.invalid",
+        tenant_key="tenant",
+        tenant_secret="secret",
+        timeout_seconds=1.0,
+        api_version="v2",
+    )
+    CtsProbeRunner(
+        store,
+        config(
+            mode="real",
+            gate_file=write_gate(tmp_path),
+            credentials=v2_credentials,
+        ),
+    ).schedule_active_surfaces()
+    real_v1_runner = CtsProbeRunner(
+        store,
+        config(
+            mode="real",
+            gate_file=write_gate(tmp_path),
+            credentials=credentials(),
+        ),
+        client=RecordingClient(
+            [CtsCountResult(status="auth_error", error_code="auth_error")]
+        ),
+    )
+
+    summary = real_v1_runner.schedule_and_run()
+
+    assert summary.auth_paused == 1
+    jobs = store.list_probe_jobs("surface-python")
+    assert sorted((job["rate_limit_bucket"], job["status"]) for job in jobs) == [
+        ("dry_run:dry-run-v1", "scheduled"),
+        ("real:v1", "auth_error"),
+        ("real:v2", "scheduled"),
+    ]
+
+
+def test_dry_run_observations_do_not_suppress_real_probe_with_same_query(
+    store: BuildStore, tmp_path: Path
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    dry_client = FakeCtsClient({"Python": CtsCountResult(status="ok", total=42)})
+    CtsProbeRunner(store, config(mode="dry_run"), client=dry_client).schedule_and_run()
+
+    real_client = RecordingClient([CtsCountResult(status="ok", total=7)])
+    summary = CtsProbeRunner(
+        store,
+        config(mode="real", gate_file=write_gate(tmp_path), credentials=credentials()),
+        client=real_client,
+    ).schedule_and_run()
+
+    assert summary.skipped_fresh == 0
+    assert summary.completed == 1
+    assert real_client.requests == [("Python", "keyword")]
+    assert sorted(
+        row["cts_api_version"] for row in store.list_observations("surface-python")
+    ) == ["dry-run-v1", "v1"]
 
 
 def test_ttl_dedupe_skips_fresh_observations_with_same_query_hash_and_mode(
@@ -163,12 +501,12 @@ def test_ttl_dedupe_skips_fresh_observations_with_same_query_hash_and_mode(
 ) -> None:
     insert_surface(store, "surface-python", "Python")
     runner = CtsProbeRunner(store, config(mode="dry_run"))
-    query_hash = runner.query_hash("Python", "dry_run")
+    query_hash = runner.query_hash("Python", "keyword")
     store.insert_probe_job(
         probe_job_id="probe-existing",
         surface_id="surface-python",
         query_text="Python",
-        query_mode="dry_run",
+        query_mode="keyword",
         priority=0,
         dedupe_key="existing-dedupe",
         scheduled_at=(NOW - timedelta(minutes=5)).isoformat(),
@@ -185,13 +523,13 @@ def test_ttl_dedupe_skips_fresh_observations_with_same_query_hash_and_mode(
         surface_id="surface-python",
         query_text="Python",
         query_hash=query_hash,
-        query_mode="dry_run",
+        query_mode="keyword",
         total=99,
         latency_ms=1,
         status="ok",
         error_code=None,
         observed_at=(NOW - timedelta(minutes=5)).isoformat(),
-        cts_api_version="fake-v1",
+        cts_api_version="dry-run-v1",
         builder_run_id="run-1",
     )
 
@@ -201,6 +539,67 @@ def test_ttl_dedupe_skips_fresh_observations_with_same_query_hash_and_mode(
     jobs = store.list_probe_jobs("surface-python")
     assert len(jobs) == 1
     assert jobs[0]["probe_job_id"] == "probe-existing"
+
+
+def test_stale_observation_schedules_new_probe_job(store: BuildStore) -> None:
+    insert_surface(store, "surface-python", "Python")
+    stale_runner = CtsProbeRunner(
+        store,
+        config(mode="dry_run", now=NOW - timedelta(days=2)),
+        client=FakeCtsClient({"Python": CtsCountResult(status="ok", total=12)}),
+    )
+    stale_runner.schedule_and_run()
+
+    summary = CtsProbeRunner(
+        store,
+        config(mode="dry_run", ttl_seconds=60),
+        client=FakeCtsClient({"Python": CtsCountResult(status="ok", total=13)}),
+    ).schedule_and_run()
+
+    assert summary.scheduled == 1
+    assert summary.completed == 1
+    jobs = store.list_probe_jobs("surface-python")
+    assert len(jobs) == 2
+    assert {job["status"] for job in jobs} == {"succeeded"}
+    assert store.list_observations("surface-python")[0]["total"] == 13
+
+
+def test_real_api_version_change_schedules_distinct_probe_job(
+    store: BuildStore, tmp_path: Path
+) -> None:
+    insert_surface(store, "surface-python", "Python")
+    CtsProbeRunner(
+        store,
+        config(
+            mode="real",
+            gate_file=write_gate(tmp_path),
+            credentials=credentials(),
+        ),
+        client=RecordingClient([CtsCountResult(status="ok", total=7)]),
+    ).schedule_and_run()
+    v2_credentials = CtsClientConfig(
+        base_url="https://cts.invalid",
+        tenant_key="tenant",
+        tenant_secret="secret",
+        timeout_seconds=1.0,
+        api_version="v2",
+    )
+    summary = CtsProbeRunner(
+        store,
+        config(
+            mode="real",
+            gate_file=write_gate(tmp_path),
+            credentials=v2_credentials,
+        ),
+        client=RecordingClient([CtsCountResult(status="ok", total=8)]),
+    ).schedule_and_run()
+
+    assert summary.scheduled == 1
+    assert summary.completed == 1
+    assert len(store.list_probe_jobs("surface-python")) == 2
+    assert sorted(
+        row["cts_api_version"] for row in store.list_observations("surface-python")
+    ) == ["v1", "v2"]
 
 
 @pytest.mark.parametrize(
@@ -279,7 +678,7 @@ def test_failure_observations_do_not_overwrite_old_successful_totals(
         last_error_code=None,
     )
     old_hash = CtsProbeRunner(store, config(mode="dry_run")).query_hash(
-        "Python", "dry_run"
+        "Python", "keyword"
     )
     store.insert_cts_recall_observation(
         observation_id="obs-old",
@@ -287,7 +686,7 @@ def test_failure_observations_do_not_overwrite_old_successful_totals(
         surface_id="surface-python",
         query_text="Python",
         query_hash=old_hash,
-        query_mode="dry_run",
+        query_mode="keyword",
         total=55,
         latency_ms=1,
         status="ok",
@@ -314,3 +713,24 @@ def test_failure_observations_do_not_overwrite_old_successful_totals(
     assert observations[0]["status"] == "server_error"
     assert observations[0]["total"] is None
     assert store.latest_successful_observation_total("surface-python") == 55
+
+
+def test_insert_probe_job_if_absent_does_not_swallow_integrity_errors(
+    store: BuildStore,
+) -> None:
+    with pytest.raises(sqlite3.IntegrityError):
+        store.insert_probe_job_if_absent(
+            probe_job_id="probe-missing-surface",
+            surface_id="missing-surface",
+            query_text="Python",
+            query_mode="keyword",
+            priority=0,
+            dedupe_key="missing-surface:keyword:python",
+            scheduled_at=NOW.isoformat(),
+            not_before=NOW.isoformat(),
+            attempt_count=0,
+            status="scheduled",
+            rate_limit_bucket="dry_run",
+            created_reason="test",
+            last_error_code=None,
+        )

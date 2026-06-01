@@ -430,7 +430,18 @@ class BuildStore:
                 last_error_code=last_error_code,
             )
         except sqlite3.IntegrityError:
-            return False
+            existing = self._fetch_one(
+                "select probe_job_id, dedupe_key from probe_jobs "
+                "where probe_job_id = ? or dedupe_key = ?",
+                (probe_job_id, dedupe_key),
+            )
+            if (
+                existing is not None
+                and existing["probe_job_id"] == probe_job_id
+                and existing["dedupe_key"] == dedupe_key
+            ):
+                return False
+            raise
         return True
 
     def insert_cts_recall_observation(
@@ -584,19 +595,60 @@ class BuildStore:
             ("scheduled", "retry_scheduled", due_at),
         )
 
+    def lease_due_probe_jobs(
+        self, due_at: str, *, rate_limit_bucket: str
+    ) -> list[dict[str, object]]:
+        rows = self._fetch_all(
+            "select * from probe_jobs where status in (?, ?) and not_before <= ? "
+            "and rate_limit_bucket = ? order by priority, scheduled_at, probe_job_id",
+            ("scheduled", "retry_scheduled", due_at, rate_limit_bucket),
+        )
+        leased: list[dict[str, object]] = []
+        for row in rows:
+            cursor = self.connection.execute(
+                """
+                update probe_jobs
+                set status = ?
+                where probe_job_id = ? and status in (?, ?)
+                """,
+                ("running", row["probe_job_id"], "scheduled", "retry_scheduled"),
+            )
+            if cursor.rowcount == 1:
+                leased.append(row)
+        self.connection.commit()
+        return leased
+
+    def find_open_probe_job(self, dedupe_key_prefix: str) -> dict[str, object] | None:
+        return self._fetch_one(
+            "select * from probe_jobs "
+            "where dedupe_key >= ? and dedupe_key < ? "
+            "and status in (?, ?, ?, ?) "
+            "order by scheduled_at, probe_job_id limit 1",
+            (
+                f"{dedupe_key_prefix}:",
+                f"{dedupe_key_prefix};",
+                "scheduled",
+                "retry_scheduled",
+                "running",
+                "paused_auth",
+            ),
+        )
+
     def find_observation_since(
         self,
         *,
         surface_id: str,
         query_hash: str,
         query_mode: str,
+        cts_api_version: str,
         observed_after: str,
     ) -> dict[str, object] | None:
         return self._fetch_one(
             "select * from cts_recall_observations "
-            "where surface_id = ? and query_hash = ? and query_mode = ? and observed_at >= ? "
+            "where surface_id = ? and query_hash = ? and query_mode = ? "
+            "and cts_api_version = ? and observed_at >= ? "
             "order by observed_at desc, observation_id limit 1",
-            (surface_id, query_hash, query_mode, observed_after),
+            (surface_id, query_hash, query_mode, cts_api_version, observed_after),
         )
 
     def update_probe_job(
@@ -623,19 +675,24 @@ class BuildStore:
         paused_status: str,
         error_code: str | None,
         exclude_probe_job_id: str,
+        rate_limit_bucket: str,
     ) -> None:
         self._execute(
             """
             update probe_jobs
             set status = ?, last_error_code = ?
-            where status in (?, ?) and probe_job_id != ?
+            where status in (?, ?, ?)
+              and probe_job_id != ?
+              and rate_limit_bucket = ?
             """,
             (
                 paused_status,
                 error_code,
                 "scheduled",
                 "retry_scheduled",
+                "running",
                 exclude_probe_job_id,
+                rate_limit_bucket,
             ),
         )
 
