@@ -39,11 +39,12 @@ SeekTalent should treat package, artifact, or snapshot validation failures as
 
 ```python
 def open_keyword_graph_or_unavailable(snapshot_path, manifest_path=None):
+    unavailable_errors = (ImportError, OSError)
     try:
         from seektalent_keyword_graph import KeywordGraph
         from seektalent_keyword_graph.runtime.errors import SnapshotError
 
-        unavailable_errors = (ImportError, OSError, SnapshotError)
+        unavailable_errors = (*unavailable_errors, SnapshotError)
         return {
             "status": "ok",
             "graph": KeywordGraph.open(snapshot_path, manifest_path),

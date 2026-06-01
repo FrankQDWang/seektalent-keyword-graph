@@ -129,6 +129,10 @@ def test_fail_open_adapter_represents_missing_graph_as_unavailable(
         missing_snapshot,
         import_keyword_graph=lambda: (_ for _ in ()).throw(ImportError("missing")),
     )
+    import_os_error_result = _documented_fail_open_adapter(
+        missing_snapshot,
+        import_keyword_graph=lambda: (_ for _ in ()).throw(OSError("blocked")),
+    )
 
     assert missing_snapshot_result == {
         "status": "keyword_graph_unavailable",
@@ -137,6 +141,10 @@ def test_fail_open_adapter_represents_missing_graph_as_unavailable(
     assert missing_package_result == {
         "status": "keyword_graph_unavailable",
         "reason": "ImportError",
+    }
+    assert import_os_error_result == {
+        "status": "keyword_graph_unavailable",
+        "reason": "OSError",
     }
 
     docs = (DOCS_DIR / "seektalent-integration.md").read_text(encoding="utf-8")
@@ -334,9 +342,9 @@ def _documented_fail_open_adapter(
     *,
     import_keyword_graph: Any = lambda: KeywordGraph,
 ) -> dict[str, str]:
+    unavailable_errors = (ImportError, OSError, SnapshotError)
     try:
         graph_cls = import_keyword_graph()
-        unavailable_errors = (ImportError, OSError, SnapshotError)
         graph_cls.open(snapshot_path, manifest_path)
     except ImportError as exc:
         return {
