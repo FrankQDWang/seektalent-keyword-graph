@@ -1,6 +1,6 @@
 # Readiness Report
 
-HEAD: `526ba4d5abab587cf46d9a10aa345eee851887ff`
+HEAD: `bc66b8f7e5c794db727682b4ae9b12faba864000`
 Overall status: complete
 
 ## Verification Commands
@@ -62,7 +62,7 @@ Overall status: complete
 - Command: `uv run keyword-graph validate-snapshot --snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3 --manifest /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json --compressed-snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz`
   Exit code: 0
   Status: success
-  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "8d7a6543e305a5bbe18af4091479e4e3d00ee41e4c73a274715b244eea8f6653", "manifest": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "5ad9c17faa015964cc350dfdde778c55387b84752df9c58860779c3341a5c0a0", "status": "ok"}
+  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "25c68df339cfff45ef57f29440e84898f7042f33c3917ac0b9f6e3801df56ce6", "manifest": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "d4a61ab3ba021648c3c005337d6914d11170795fea6ed5a91012ce8bbb8a9bfc", "status": "ok"}
 
 ## Query Recall Optimization Status
 
