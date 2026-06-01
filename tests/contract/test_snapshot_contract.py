@@ -16,8 +16,9 @@ def _meta_payload() -> dict[str, object]:
         "builder_run_id": "builder-run-001",
         "build_report_sha256": "a" * 64,
         "manifest_sha256": "b" * 64,
-        "cts_probe_window_start": "2026-05-31T09:00:00+08:00",
-        "cts_probe_window_end": "2026-05-31T21:00:00+08:00",
+        "provider_probe_window_start": "2026-05-31T09:00:00+08:00",
+        "provider_probe_window_end": "2026-05-31T21:00:00+08:00",
+        "provider_sources": ["liepin"],
         "created_by_package_version": "0.1.0",
     }
 
@@ -59,6 +60,9 @@ def test_snapshot_meta_and_manifest_valid_payloads_validate() -> None:
     [
         (SnapshotMeta, _meta_payload(), "kg_snapshot_id"),
         (SnapshotMeta, _meta_payload(), "manifest_sha256"),
+        (SnapshotMeta, _meta_payload(), "provider_probe_window_start"),
+        (SnapshotMeta, _meta_payload(), "provider_probe_window_end"),
+        (SnapshotMeta, _meta_payload(), "provider_sources"),
         (SnapshotManifest, _manifest_payload(), "kg_snapshot_id"),
         (SnapshotManifest, _manifest_payload(), "artifacts"),
         (SnapshotManifest, _manifest_payload(), "byte_sizes"),
@@ -105,6 +109,17 @@ def test_snapshot_contracts_reject_extra_fields(
 
     with pytest.raises(ValidationError):
         model.model_validate(payload_with_extra)
+
+
+def test_snapshot_meta_accepts_legacy_cts_probe_window_optional() -> None:
+    payload = _meta_payload()
+    payload["cts_probe_window_start"] = "2026-05-31T09:00:00+08:00"
+    payload["cts_probe_window_end"] = "2026-05-31T21:00:00+08:00"
+
+    meta = SnapshotMeta.model_validate(payload)
+
+    assert meta.provider_probe_window_start == "2026-05-31T09:00:00+08:00"
+    assert meta.provider_sources == ["liepin"]
 
 
 def test_snapshot_manifest_rejects_negative_byte_sizes() -> None:

@@ -6,6 +6,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from seektalent_keyword_graph.builder.build_snapshot import (
     BuildSnapshotConfig,
     build_runtime_snapshot,
@@ -220,11 +222,11 @@ def test_build_snapshot_projects_release_safe_runtime_artifacts(
             "provider_api_version from provider_recall_observations"
         ).fetchall()
         assert observations == [
-            ("cts", "obs-python-ok", 42, "ok", "healthy", "fake-v1")
+            ("cts", "obs-python-later-fail", None, "error", "unknown", "fake-v1")
         ]
         assert conn.execute(
             "select recall_bucket from surfaces where surface_id = 'surface-python'"
-        ).fetchone() == ("healthy",)
+        ).fetchone() == ("unknown",)
         assert conn.execute(
             "select query_text from provider_recall_observations "
             "where provider = 'cts' and query_hash = 'hash-python'"
@@ -353,7 +355,7 @@ def test_snapshot_store_reads_provider_specific_observations(tmp_path: Path) -> 
             "cts", "surface-python", "hash-python", "keyword"
         )
         assert observation is not None
-        assert observation["recall_bucket"] == "healthy"
+        assert observation["recall_bucket"] == "unknown"
         assert observation["provider_api_version"] == "fake-v1"
         assert store.list_surface_recall_observations("cts", "surface-python") == [
             observation
@@ -363,3 +365,97 @@ def test_snapshot_store_reads_provider_specific_observations(tmp_path: Path) -> 
         assert surface["surface_id"] == "surface-python"
     finally:
         store.close()
+
+
+def test_build_snapshot_derives_provider_sources_from_exported_rows(
+    tmp_path: Path,
+) -> None:
+    build_db = tmp_path / "build.sqlite3"
+    seed_build_db(build_db)
+    store = BuildStore.open(build_db)
+    try:
+        store.connection.execute("delete from provider_recall_observations")
+        store.connection.execute("delete from probe_jobs")
+        store.connection.commit()
+        store.insert_probe_job(
+            probe_job_id="probe-python-liepin",
+            provider="liepin",
+            surface_id="surface-python",
+            query_text="Python",
+            query_hash="hash-python",
+            query_mode="keyword",
+            priority=1,
+            dedupe_key="liepin:python:keyword",
+            scheduled_at="2026-05-31T00:00:00Z",
+            not_before="2026-05-31T00:00:00Z",
+            attempt_count=0,
+            status="succeeded",
+            rate_limit_bucket="fake",
+            created_reason="release",
+            last_error_code=None,
+        )
+        store.insert_provider_recall_observation(
+            observation_id="obs-python-liepin",
+            provider="liepin",
+            probe_job_id="probe-python-liepin",
+            surface_id="surface-python",
+            query_text="Python",
+            query_hash="hash-python",
+            query_mode="keyword",
+            total=37,
+            latency_ms=15,
+            status="ok",
+            error_code=None,
+            observed_at="2026-05-31T23:50:00Z",
+            recall_bucket="healthy",
+            provider_api_version="liepin-v1",
+            builder_run_id="run-1",
+            evidence_ref="liepin:obs-python-liepin",
+        )
+    finally:
+        store.close()
+
+    result = build_runtime_snapshot(
+        build_db,
+        tmp_path / "out",
+        BuildSnapshotConfig(
+            kg_snapshot_id="kg-snapshot-test",
+            built_at=NOW,
+            source_corpus_version="corpus-2026-06-01",
+            builder_run_id="run-1",
+            provider_probe_window_start="2026-05-31T00:00:00Z",
+            provider_probe_window_end=NOW,
+        ),
+    )
+
+    store = SQLiteSnapshotStore.open(result.snapshot_path, result.manifest_path)
+    try:
+        assert store.list_supported_providers() == ["liepin"]
+        observation = store.get_latest_recall_observation(
+            "liepin", "surface-python", "hash-python", "keyword"
+        )
+        assert observation is not None
+        assert observation["observation_id"] == "obs-python-liepin"
+        assert observation["provider_api_version"] == "liepin-v1"
+    finally:
+        store.close()
+
+
+def test_build_snapshot_rejects_provider_sources_mismatch(tmp_path: Path) -> None:
+    build_db = tmp_path / "build.sqlite3"
+    seed_build_db(build_db)
+
+    with pytest.raises(ValueError, match="provider_sources"):
+        build_runtime_snapshot(
+            build_db,
+            tmp_path / "out",
+            BuildSnapshotConfig(
+                kg_snapshot_id="kg-snapshot-test",
+                built_at=NOW,
+                source_corpus_version="corpus-2026-06-01",
+                builder_run_id="run-1",
+                cts_probe_window_start="2026-05-31T00:00:00Z",
+                cts_probe_window_end=NOW,
+                provider_sources=("liepin",),
+            ),
+        )

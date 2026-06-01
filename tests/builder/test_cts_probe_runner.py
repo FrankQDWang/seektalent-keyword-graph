@@ -202,7 +202,7 @@ def test_fake_dry_run_persists_observations_and_probe_job_status(
     assert probe_job["status"] == "succeeded"
     assert probe_job["provider"] == "cts"
     assert probe_job["query_hash"] == runner.query_hash("Python", "keyword")
-    observation = store.list_observations("surface-python")[0]
+    observation = store.list_cts_observations("surface-python")[0]
     assert observation["provider"] == "cts"
     assert observation["status"] == "ok"
     assert observation["total"] == 42
@@ -259,7 +259,7 @@ def test_real_mode_with_valid_gate_credentials_and_window_uses_injected_client(
 
     assert summary.completed == 1
     assert client.requests == [("Python", "keyword")]
-    assert store.list_observations("surface-python")[0]["total"] == 7
+    assert store.list_cts_observations("surface-python")[0]["total"] == 7
 
 
 def test_runner_serializes_cts_calls_to_preserve_auth_accounting(
@@ -395,7 +395,7 @@ def test_auth_error_with_configured_concurrency_records_started_calls_before_pau
     observations = [
         row["query_text"]
         for surface_id in ("surface-java", "surface-python", "surface-sql")
-        for row in store.list_observations(surface_id)
+        for row in store.list_cts_observations(surface_id)
     ]
     assert observations == ["Java"]
 
@@ -432,7 +432,7 @@ def test_auth_error_after_prior_success_does_not_drop_started_call_accounting(
     observations = {
         row["query_text"]: row["status"]
         for surface_id in ("surface-java", "surface-python", "surface-sql")
-        for row in store.list_observations(surface_id)
+        for row in store.list_cts_observations(surface_id)
     }
     assert observations == {"Java": "ok", "Python": "auth_error"}
 
@@ -497,8 +497,9 @@ def test_dry_run_observations_do_not_suppress_real_probe_with_same_query(
     assert summary.skipped_fresh == 0
     assert summary.completed == 1
     assert real_client.requests == [("Python", "keyword")]
+    observations = store.list_cts_observations("surface-python")
     assert sorted(
-        row["provider_api_version"] for row in store.list_observations("surface-python")
+        row["provider_api_version"] for row in observations
     ) == ["dry-run-v1", "v1"]
 
 
@@ -567,7 +568,7 @@ def test_stale_observation_schedules_new_probe_job(store: BuildStore) -> None:
     jobs = store.list_probe_jobs("surface-python")
     assert len(jobs) == 2
     assert {job["status"] for job in jobs} == {"succeeded"}
-    assert store.list_observations("surface-python")[0]["total"] == 13
+    assert store.list_cts_observations("surface-python")[0]["total"] == 13
 
 
 def test_real_api_version_change_schedules_distinct_probe_job(
@@ -603,8 +604,9 @@ def test_real_api_version_change_schedules_distinct_probe_job(
     assert summary.scheduled == 1
     assert summary.completed == 1
     assert len(store.list_probe_jobs("surface-python")) == 2
+    observations = store.list_cts_observations("surface-python")
     assert sorted(
-        row["provider_api_version"] for row in store.list_observations("surface-python")
+        row["provider_api_version"] for row in observations
     ) == ["v1", "v2"]
 
 
@@ -715,10 +717,10 @@ def test_failure_observations_do_not_overwrite_old_successful_totals(
 
     runner.schedule_and_run()
 
-    observations = store.list_observations("surface-python")
+    observations = store.list_cts_observations("surface-python")
     assert observations[0]["status"] == "server_error"
     assert observations[0]["total"] is None
-    assert store.latest_successful_observation_total("surface-python") == 55
+    assert store.latest_successful_cts_observation_total("surface-python") == 55
 
 
 def test_insert_probe_job_if_absent_does_not_swallow_integrity_errors(

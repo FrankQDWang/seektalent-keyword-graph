@@ -179,15 +179,107 @@ def test_release_validation_rejects_serving_surface_without_valid_policy_observa
     )
 
 
+def test_release_validation_accepts_liepin_only_snapshot(tmp_path: Path) -> None:
+    build_db = tmp_path / "build.sqlite3"
+    store = BuildStore.open(build_db)
+    try:
+        store.insert_builder_run(
+            builder_run_id="run-1",
+            started_at="2026-05-31T23:00:00Z",
+            finished_at=NOW,
+            input_corpus_version="corpus-1",
+            status="succeeded",
+            report_json="{}",
+        )
+        store.insert_surface(
+            surface_id="surface-1",
+            text_raw="Python",
+            text_norm="python",
+            display_text="Python",
+            language="en",
+            token_class="skill",
+            query_safe=True,
+            is_exact_phrase_preferred=False,
+            ambiguity_score=0.1,
+            specificity_score=0.9,
+            jd_df=5,
+            jd_tf_total=8,
+            serving_status="active",
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        store.insert_probe_job(
+            probe_job_id="probe-1",
+            provider="liepin",
+            surface_id="surface-1",
+            query_text="Python",
+            query_hash="hash-python",
+            query_mode="keyword",
+            priority=1,
+            dedupe_key="liepin:python:keyword",
+            scheduled_at=NOW,
+            not_before=NOW,
+            attempt_count=0,
+            status="succeeded",
+            rate_limit_bucket="fake",
+            created_reason="release",
+            last_error_code=None,
+        )
+        store.insert_provider_recall_observation(
+            observation_id="obs-liepin-1",
+            provider="liepin",
+            probe_job_id="probe-1",
+            surface_id="surface-1",
+            query_text="Python",
+            query_hash="hash-python",
+            query_mode="keyword",
+            total=42,
+            latency_ms=12,
+            status="ok",
+            error_code=None,
+            observed_at="2026-05-31T23:55:00Z",
+            recall_bucket="healthy",
+            provider_api_version="liepin-v1",
+            builder_run_id="run-1",
+            evidence_ref="liepin:obs-liepin-1",
+        )
+    finally:
+        store.close()
+
+    artifacts = build_runtime_snapshot(
+        build_db,
+        tmp_path / "out",
+        BuildSnapshotConfig(
+            kg_snapshot_id="kg-snapshot-test",
+            built_at=NOW,
+            source_corpus_version="corpus-1",
+            builder_run_id="run-1",
+            cts_probe_window_start="2026-05-31T00:00:00Z",
+            cts_probe_window_end=NOW,
+            provider_sources=("liepin",),
+            default_serving_provider="liepin",
+        ),
+    )
+
+    result = validate_release_artifacts(
+        artifacts.snapshot_path,
+        artifacts.manifest_path,
+        compressed_snapshot_path=artifacts.compressed_snapshot_path,
+    )
+
+    assert result.ok
+
+
 @pytest.mark.parametrize("recall_bucket", ["stale", "unknown"])
-def test_release_validation_accepts_explicit_stale_or_unknown_policy_bucket(
+def test_release_validation_accepts_explicit_stale_or_unknown_provider_bucket(
     valid_artifacts, recall_bucket: str
 ) -> None:
     conn = sqlite3.connect(valid_artifacts.snapshot_path)
     try:
-        conn.execute("delete from provider_recall_observations")
         conn.execute(
-            "update surfaces set recall_bucket = ? where surface_id = 'surface-1'",
+            "update provider_recall_observations "
+            "set status = 'error', total = null, recall_bucket = ? "
+            "where surface_id = 'surface-1'",
             (recall_bucket,),
         )
         conn.commit()

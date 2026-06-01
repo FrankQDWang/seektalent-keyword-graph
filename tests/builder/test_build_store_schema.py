@@ -205,11 +205,16 @@ def test_build_store_initializes_schema_and_round_trips_all_owned_entities(
         assert store.list_surface_relations("surface-1")[0]["relation_type"] == "alias"
         assert store.list_cooccurrence_edges("surface-1")[0]["edge_id"] == "edge-1"
         assert store.list_probe_jobs("surface-1")[0]["probe_job_id"] == "probe-1"
-        observations = store.list_observations("surface-1")
+        observations = store.list_provider_observations("cts", "surface-1")
+        assert store.list_cts_observations("surface-1") == observations
         assert {observation["provider"] for observation in observations} == {"cts"}
         assert observations[0]["total"] == 42
         assert observations[0]["recall_bucket"] == "healthy"
         assert observations[0]["provider_api_version"] == "fake-v1"
+        assert store.latest_successful_provider_observation_total(
+            "cts", "surface-1"
+        ) == 42
+        assert store.latest_successful_cts_observation_total("surface-1") == 42
         decision = store.list_review_decisions("surface", "surface-1")[0]
         assert decision["decision"] == "approve"
         assert store.list_build_events("run-1")[0]["message"] == "imported"

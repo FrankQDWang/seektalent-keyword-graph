@@ -29,7 +29,7 @@ from seektalent_keyword_graph.storage.sqlite_schema import (
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class BuildSnapshotConfig:
     """Explicit metadata and policy knobs for a snapshot build."""
 
@@ -37,13 +37,71 @@ class BuildSnapshotConfig:
     built_at: str
     source_corpus_version: str
     builder_run_id: str
-    cts_probe_window_start: str
-    cts_probe_window_end: str
+    provider_probe_window_start: str
+    provider_probe_window_end: str
     max_observation_age_days: int = 7
     healthy_min_total: int = 10
     healthy_max_total: int = 1000
-    provider_sources: tuple[str, ...] = ("cts",)
+    provider_sources: tuple[str, ...] | None = None
     default_serving_provider: str = "cts"
+    cts_probe_window_start: str | None = None
+    cts_probe_window_end: str | None = None
+
+    def __init__(
+        self,
+        *,
+        kg_snapshot_id: str,
+        built_at: str,
+        source_corpus_version: str,
+        builder_run_id: str,
+        provider_probe_window_start: str | None = None,
+        provider_probe_window_end: str | None = None,
+        cts_probe_window_start: str | None = None,
+        cts_probe_window_end: str | None = None,
+        max_observation_age_days: int = 7,
+        healthy_min_total: int = 10,
+        healthy_max_total: int = 1000,
+        provider_sources: tuple[str, ...] | None = None,
+        default_serving_provider: str = "cts",
+    ) -> None:
+        window_start = provider_probe_window_start or cts_probe_window_start
+        window_end = provider_probe_window_end or cts_probe_window_end
+        if window_start is None or window_end is None:
+            raise TypeError(
+                "provider_probe_window_start and provider_probe_window_end are required"
+            )
+        if (
+            provider_probe_window_start is not None
+            and cts_probe_window_start is not None
+            and provider_probe_window_start != cts_probe_window_start
+        ):
+            raise ValueError("provider and CTS probe window starts differ")
+        if (
+            provider_probe_window_end is not None
+            and cts_probe_window_end is not None
+            and provider_probe_window_end != cts_probe_window_end
+        ):
+            raise ValueError("provider and CTS probe window ends differ")
+
+        object.__setattr__(self, "kg_snapshot_id", kg_snapshot_id)
+        object.__setattr__(self, "built_at", built_at)
+        object.__setattr__(self, "source_corpus_version", source_corpus_version)
+        object.__setattr__(self, "builder_run_id", builder_run_id)
+        object.__setattr__(self, "provider_probe_window_start", window_start)
+        object.__setattr__(self, "provider_probe_window_end", window_end)
+        object.__setattr__(self, "cts_probe_window_start", cts_probe_window_start)
+        object.__setattr__(self, "cts_probe_window_end", cts_probe_window_end)
+        object.__setattr__(
+            self, "max_observation_age_days", max_observation_age_days
+        )
+        object.__setattr__(self, "healthy_min_total", healthy_min_total)
+        object.__setattr__(self, "healthy_max_total", healthy_max_total)
+        object.__setattr__(
+            self,
+            "provider_sources",
+            tuple(provider_sources) if provider_sources is not None else None,
+        )
+        object.__setattr__(self, "default_serving_provider", default_serving_provider)
 
 
 @dataclass(frozen=True)
@@ -93,8 +151,15 @@ def build_runtime_snapshot(
         try:
             snapshot_conn.execute("pragma foreign_keys = on")
             migrate_runtime_snapshot(snapshot_conn)
-            latest_observations = _latest_valid_observations(build_conn)
-            _insert_meta(snapshot_conn, config, build_report_sha256, manifest_sha256)
+            latest_observations = _latest_observations(build_conn)
+            provider_sources = _resolve_provider_sources(config, latest_observations)
+            _insert_meta(
+                snapshot_conn,
+                config,
+                build_report_sha256,
+                manifest_sha256,
+                provider_sources,
+            )
             _insert_policy_meta(snapshot_conn, config)
             _project_surfaces(snapshot_conn, build_conn, config, latest_observations)
             _copy_table(
@@ -250,6 +315,7 @@ def _insert_meta(
     config: BuildSnapshotConfig,
     build_report_sha256: str,
     manifest_sha256: str,
+    provider_sources: tuple[str, ...],
 ) -> None:
     rows = {
         "kg_snapshot_id": config.kg_snapshot_id,
@@ -260,15 +326,17 @@ def _insert_meta(
         "builder_run_id": config.builder_run_id,
         "build_report_sha256": build_report_sha256,
         "manifest_sha256": manifest_sha256,
-        "provider_probe_window_start": config.cts_probe_window_start,
-        "provider_probe_window_end": config.cts_probe_window_end,
+        "provider_probe_window_start": config.provider_probe_window_start,
+        "provider_probe_window_end": config.provider_probe_window_end,
         "provider_sources": json.dumps(
-            list(config.provider_sources), sort_keys=True, separators=(",", ":")
+            list(provider_sources), sort_keys=True, separators=(",", ":")
         ),
-        "cts_probe_window_start": config.cts_probe_window_start,
-        "cts_probe_window_end": config.cts_probe_window_end,
         "created_by_package_version": __version__,
     }
+    if config.cts_probe_window_start is not None:
+        rows["cts_probe_window_start"] = config.cts_probe_window_start
+    if config.cts_probe_window_end is not None:
+        rows["cts_probe_window_end"] = config.cts_probe_window_end
     conn.executemany(
         "insert into snapshot_meta(key, value) values (?, ?)",
         sorted(rows.items()),
@@ -318,12 +386,14 @@ def _project_surfaces(
     for row in rows:
         surface_id = str(row["surface_id"])
         bucket_observation = bucket_observation_by_surface.get(surface_id)
+        bucket_total = (
+            int(bucket_observation["total"])
+            if bucket_observation is not None
+            and bucket_observation["total"] is not None
+            else None
+        )
         recall_bucket = _recall_bucket(
-            total=(
-                int(bucket_observation["total"])
-                if bucket_observation is not None
-                else None
-            ),
+            total=bucket_total,
             observed_at=(
                 str(bucket_observation["observed_at"])
                 if bucket_observation is not None
@@ -384,14 +454,13 @@ def _copy_table(
     )
 
 
-def _latest_valid_observations(build_conn: sqlite3.Connection) -> list[sqlite3.Row]:
+def _latest_observations(build_conn: sqlite3.Connection) -> list[sqlite3.Row]:
     rows = build_conn.execute(
         """
         select observation_id, provider, surface_id, query_text, query_hash, query_mode,
                total, latency_ms, status, error_code, observed_at, recall_bucket,
                provider_api_version, builder_run_id, evidence_ref
         from provider_recall_observations
-        where status = 'ok' and total is not null
         order by provider, surface_id, query_hash, query_mode,
                  observed_at desc, observation_id desc
         """
@@ -406,6 +475,32 @@ def _latest_valid_observations(build_conn: sqlite3.Connection) -> list[sqlite3.R
         )
         latest.setdefault(key, row)
     return sorted(latest.values(), key=lambda row: str(row["observation_id"]))
+
+
+def _resolve_provider_sources(
+    config: BuildSnapshotConfig, observations: list[sqlite3.Row]
+) -> tuple[str, ...]:
+    exported = tuple(sorted({str(row["provider"]) for row in observations}))
+    if not exported:
+        raise ValueError(
+            "provider_sources cannot be derived without exported providers"
+        )
+
+    configured = config.provider_sources
+    if configured is None:
+        return exported
+
+    normalized = tuple(sorted(configured))
+    if len(normalized) != len(set(normalized)) or any(
+        not provider.strip() for provider in normalized
+    ):
+        raise ValueError("provider_sources must be a distinct non-empty string list")
+    if normalized != exported:
+        raise ValueError(
+            "provider_sources must match exported providers: "
+            f"configured={list(normalized)} exported={list(exported)}"
+        )
+    return normalized
 
 
 def _observation_sort_key(row: sqlite3.Row) -> tuple[str, str]:

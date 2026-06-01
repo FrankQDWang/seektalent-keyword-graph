@@ -99,8 +99,7 @@ class CtsProbeRunner:
             query_text = str(surface["display_text"])
             query_hash = self.query_hash(query_text, self.config.query_mode)
             cts_api_version = self._cts_api_version()
-            if self.store.find_observation_since(
-                provider="cts",
+            if self.store.find_cts_observation_since(
                 surface_id=str(surface["surface_id"]),
                 query_hash=query_hash,
                 query_mode=self.config.query_mode,

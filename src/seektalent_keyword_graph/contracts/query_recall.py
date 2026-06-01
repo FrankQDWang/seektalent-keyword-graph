@@ -72,6 +72,7 @@ class QueryRecallRequestTerm(ContractModel):
 class QueryRecallObservation(ContractModel):
     """Provider-specific recall evidence selected from the runtime snapshot."""
 
+    observation_id: NonEmptyString
     provider: NonEmptyString
     surface_id: NonEmptyString
     query_text: NonEmptyString

@@ -691,14 +691,14 @@ class BuildStore:
             ),
         )
 
-    def find_observation_since(
+    def find_provider_observation_since(
         self,
         *,
-        provider: str = "cts",
+        provider: str,
         surface_id: str,
         query_hash: str,
         query_mode: str,
-        cts_api_version: str,
+        provider_api_version: str,
         observed_after: str,
     ) -> dict[str, object] | None:
         return self._fetch_one(
@@ -711,9 +711,27 @@ class BuildStore:
                 surface_id,
                 query_hash,
                 query_mode,
-                cts_api_version,
+                provider_api_version,
                 observed_after,
             ),
+        )
+
+    def find_cts_observation_since(
+        self,
+        *,
+        surface_id: str,
+        query_hash: str,
+        query_mode: str,
+        cts_api_version: str,
+        observed_after: str,
+    ) -> dict[str, object] | None:
+        return self.find_provider_observation_since(
+            provider="cts",
+            surface_id=surface_id,
+            query_hash=query_hash,
+            query_mode=query_mode,
+            provider_api_version=cts_api_version,
+            observed_after=observed_after,
         )
 
     def update_probe_job(
@@ -761,23 +779,33 @@ class BuildStore:
             ),
         )
 
-    def latest_successful_observation_total(self, surface_id: str) -> int | None:
+    def latest_successful_provider_observation_total(
+        self, provider: str, surface_id: str
+    ) -> int | None:
         row = self._fetch_one(
             "select total from provider_recall_observations "
             "where provider = ? and surface_id = ? and status = ? and total is not null "
             "order by observed_at desc, observation_id limit 1",
-            ("cts", surface_id, "ok"),
+            (provider, surface_id, "ok"),
         )
         if row is None:
             return None
         return int(row["total"])
 
-    def list_observations(self, surface_id: str) -> list[dict[str, object]]:
+    def latest_successful_cts_observation_total(self, surface_id: str) -> int | None:
+        return self.latest_successful_provider_observation_total("cts", surface_id)
+
+    def list_provider_observations(
+        self, provider: str, surface_id: str
+    ) -> list[dict[str, object]]:
         return self._fetch_all(
             "select * from provider_recall_observations where provider = ? and surface_id = ? "
             "order by observed_at desc, observation_id",
-            ("cts", surface_id),
+            (provider, surface_id),
         )
+
+    def list_cts_observations(self, surface_id: str) -> list[dict[str, object]]:
+        return self.list_provider_observations("cts", surface_id)
 
     def list_review_decisions(
         self, target_type: str, target_id: str

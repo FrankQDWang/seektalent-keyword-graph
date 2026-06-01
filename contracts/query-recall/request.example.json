@@ -1,7 +1,7 @@
 {
   "schema_version": "query-recall-request-v1",
   "request_id": "req-query-recall-001",
-  "provider": "cts",
+  "provider": "liepin",
   "query_text": "k8s",
   "query_terms": [
     {

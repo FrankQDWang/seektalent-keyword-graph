@@ -86,8 +86,6 @@ REQUIRED_SNAPSHOT_META_KEYS = {
     "provider_probe_window_start",
     "provider_probe_window_end",
     "provider_sources",
-    "cts_probe_window_start",
-    "cts_probe_window_end",
     "created_by_package_version",
 }
 

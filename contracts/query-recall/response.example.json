@@ -1,12 +1,13 @@
 {
   "schema_version": "query-recall-response-v1",
   "request_id": "req-query-recall-001",
-  "provider": "cts",
+  "provider": "liepin",
   "kg_snapshot_id": "kg-2026-06-01",
   "selection_policy_version": "policy-v1",
   "input_observations": [
     {
-      "provider": "cts",
+      "observation_id": "obs-liepin-k8s",
+      "provider": "liepin",
       "surface_id": "surface-k8s",
       "query_text": "k8s",
       "query_hash": "sha256:k8s",
@@ -17,8 +18,8 @@
       "error_code": null,
       "observed_at": "2026-06-01T00:00:00Z",
       "recall_bucket": "zero",
-      "provider_api_version": "dry-run-v1",
-      "evidence_ref": "probe:obs-k8s"
+      "provider_api_version": "liepin-v1",
+      "evidence_ref": "liepin:obs-liepin-k8s"
     }
   ],
   "alternatives": [
@@ -34,7 +35,8 @@
       "evidence_type": "curated_alias",
       "evidence_ref": "relation:alias-k8s-kubernetes",
       "observation": {
-        "provider": "cts",
+        "observation_id": "obs-liepin-kubernetes",
+        "provider": "liepin",
         "surface_id": "surface-kubernetes",
         "query_text": "Kubernetes",
         "query_hash": "sha256:kubernetes",
@@ -45,8 +47,8 @@
         "error_code": null,
         "observed_at": "2026-06-01T00:00:00Z",
         "recall_bucket": "healthy",
-        "provider_api_version": "dry-run-v1",
-        "evidence_ref": "probe:obs-kubernetes"
+        "provider_api_version": "liepin-v1",
+        "evidence_ref": "liepin:obs-liepin-kubernetes"
       }
     }
   ],
@@ -57,10 +59,10 @@
       "recommended_query_text": "Kubernetes",
       "reason_code": "zero_recall",
       "reason": "Original term has zero recall and alias has healthy recall.",
-      "provider": "cts",
+      "provider": "liepin",
       "evidence_observation_ids": [
-        "probe:obs-k8s",
-        "probe:obs-kubernetes"
+        "obs-liepin-k8s",
+        "obs-liepin-kubernetes"
       ]
     }
   ],
@@ -69,7 +71,7 @@
       "code": "zero_recall",
       "message": "Input term has zero observed recall.",
       "query_text": "k8s",
-      "provider": "cts"
+      "provider": "liepin"
     }
   ],
   "optimized_terms": [
@@ -79,7 +81,7 @@
       "action": "replace",
       "rank": 1,
       "source_query_text": "k8s",
-      "provider": "cts",
+      "provider": "liepin",
       "recall_bucket": "healthy",
       "reason": "Alias has healthier provider recall."
     }
@@ -89,7 +91,7 @@
     "snapshot_schema_version": "snapshot-v1",
     "selection_policy_version": "policy-v1",
     "provider_sources": [
-      "cts"
+      "liepin"
     ],
     "source_refs": [
       "snapshot:kg-2026-06-01"

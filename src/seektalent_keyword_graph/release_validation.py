@@ -282,32 +282,13 @@ def _open_runtime_snapshot(
 def _validate_serving_surface_policy(
     store: SQLiteSnapshotStore, errors: list[ReleaseValidationError]
 ) -> None:
-    rows = store.connection.execute(
-        """
-        select s.surface_id, s.recall_bucket
-        from surfaces s
-        where s.serving_status = 'active'
-          and s.query_safe = 1
-          and s.recall_bucket not in ('unknown', 'stale')
-          and not exists (
-            select 1
-            from provider_recall_observations o
-            where o.surface_id = s.surface_id
-              and o.provider = 'cts'
-              and o.status = 'ok'
-              and o.total is not null
-            )
-        order by s.surface_id
-        """
-    ).fetchall()
-    for row in rows:
+    try:
+        store.validate()
+    except SnapshotError as exc:
         errors.append(
             ReleaseValidationError(
                 code="serving_surface_policy_error",
-                message=(
-                    "serving surface lacks valid recall observation: "
-                    f"{row['surface_id']} (bucket {row['recall_bucket']})"
-                ),
+                message=str(exc),
             )
         )
 

@@ -28,8 +28,11 @@ class SnapshotMeta(ContractModel):
     builder_run_id: NonEmptyString
     build_report_sha256: Sha256Hex
     manifest_sha256: Sha256Hex
-    cts_probe_window_start: NonEmptyString
-    cts_probe_window_end: NonEmptyString
+    provider_probe_window_start: NonEmptyString
+    provider_probe_window_end: NonEmptyString
+    provider_sources: list[NonEmptyString] = Field(min_length=1)
+    cts_probe_window_start: NonEmptyString | None = None
+    cts_probe_window_end: NonEmptyString | None = None
     created_by_package_version: NonEmptyString
 
 

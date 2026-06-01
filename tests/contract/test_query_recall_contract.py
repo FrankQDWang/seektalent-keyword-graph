@@ -30,6 +30,7 @@ def _response_payload() -> dict[str, object]:
         "selection_policy_version": "policy-v1",
         "input_observations": [
             {
+                "observation_id": "obs-liepin-k8s",
                 "provider": "liepin",
                 "surface_id": "surface-k8s",
                 "query_text": "k8s",
@@ -42,7 +43,7 @@ def _response_payload() -> dict[str, object]:
                 "observed_at": "2026-06-01T00:00:00Z",
                 "recall_bucket": "zero",
                 "provider_api_version": "liepin-v1",
-                "evidence_ref": "probe:obs-k8s",
+                "evidence_ref": "liepin:obs-liepin-k8s",
             }
         ],
         "alternatives": [
@@ -58,6 +59,7 @@ def _response_payload() -> dict[str, object]:
                 "evidence_type": "curated_alias",
                 "evidence_ref": "relation:alias-k8s-kubernetes",
                 "observation": {
+                    "observation_id": "obs-liepin-kubernetes",
                     "provider": "liepin",
                     "surface_id": "surface-kubernetes",
                     "query_text": "Kubernetes",
@@ -70,7 +72,7 @@ def _response_payload() -> dict[str, object]:
                     "observed_at": "2026-06-01T00:00:00Z",
                     "recall_bucket": "healthy",
                     "provider_api_version": "liepin-v1",
-                    "evidence_ref": "probe:obs-kubernetes",
+                    "evidence_ref": "liepin:obs-liepin-kubernetes",
                 },
             }
         ],
@@ -82,7 +84,10 @@ def _response_payload() -> dict[str, object]:
                 "reason_code": "zero_recall",
                 "reason": "Original term has zero recall and alias has healthy recall.",
                 "provider": "liepin",
-                "evidence_observation_ids": ["probe:obs-k8s", "probe:obs-kubernetes"],
+                "evidence_observation_ids": [
+                    "obs-liepin-k8s",
+                    "obs-liepin-kubernetes",
+                ],
             }
         ],
         "warnings": [
@@ -162,6 +167,7 @@ def test_nested_response_models_validate_public_contract() -> None:
     response = QueryRecallResponse.model_validate(_response_payload())
 
     assert response.input_observations[0] == QueryRecallObservation(
+        observation_id="obs-liepin-k8s",
         provider="liepin",
         surface_id="surface-k8s",
         query_text="k8s",
@@ -174,7 +180,7 @@ def test_nested_response_models_validate_public_contract() -> None:
         observed_at="2026-06-01T00:00:00Z",
         recall_bucket="zero",
         provider_api_version="liepin-v1",
-        evidence_ref="probe:obs-k8s",
+        evidence_ref="liepin:obs-liepin-k8s",
     )
     assert isinstance(response.alternatives[0], QueryRecallAlternative)
     assert isinstance(response.recommendations[0], QueryRecallRecommendation)
@@ -210,6 +216,16 @@ def test_query_recall_examples_validate_through_pydantic() -> None:
     assert parsed_request.provider in {"cts", "liepin", "boss"}
     assert parsed_response.input_observations[0].provider == parsed_request.provider
     assert parsed_response.input_observations[0].provider_api_version
+    observation_ids = {
+        observation.observation_id
+        for observation in parsed_response.input_observations
+    } | {
+        alternative.observation.observation_id
+        for alternative in parsed_response.alternatives
+        if alternative.observation is not None
+    }
+    for recommendation in parsed_response.recommendations:
+        assert set(recommendation.evidence_observation_ids) <= observation_ids
     assert "query_bundles" not in response
 
 

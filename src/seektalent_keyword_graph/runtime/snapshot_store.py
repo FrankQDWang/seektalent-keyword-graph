@@ -168,7 +168,7 @@ class SQLiteSnapshotStore:
             (surface_id, surface_id),
         )
 
-    def list_recall_observations(self, surface_id: str) -> list[dict[str, object]]:
+    def list_cts_recall_observations(self, surface_id: str) -> list[dict[str, object]]:
         return self.list_surface_recall_observations("cts", surface_id)
 
     def list_supported_providers(self) -> list[str]:
@@ -182,6 +182,8 @@ class SQLiteSnapshotStore:
             for provider in providers
         ):
             raise SnapshotSchemaError("provider_sources meta must be a non-empty string list")
+        if len(providers) != len(set(providers)):
+            raise SnapshotSchemaError("provider_sources meta must contain distinct providers")
         return sorted(providers)
 
     def get_latest_recall_observation(
@@ -256,6 +258,7 @@ class SQLiteSnapshotStore:
         providers = self.list_supported_providers()
         if not providers:
             raise SnapshotSchemaError("provider_sources meta must not be empty")
+        self._validate_provider_sources_match_rows(providers)
 
     def _validate_references(self) -> None:
         orphan_checks = (
@@ -340,31 +343,54 @@ class SQLiteSnapshotStore:
     def _validate_provider_recall_coverage(self) -> None:
         providers = self.list_supported_providers()
         for provider in providers:
-            row = self.connection.execute(
+            surfaces = self.connection.execute(
                 """
                 select s.surface_id
                 from surfaces s
                 where s.serving_status = 'active'
                   and s.query_safe = 1
-                  and s.recall_bucket not in ('stale', 'unknown')
-                  and not exists (
-                    select 1
-                    from provider_recall_observations o
-                    where o.provider = ?
-                      and o.surface_id = s.surface_id
-                      and o.status = 'ok'
-                      and o.total is not null
-                  )
                 order by s.surface_id
-                limit 1
-                """,
-                (provider,),
-            ).fetchone()
-            if row is not None:
+                """
+            ).fetchall()
+            for surface in surfaces:
+                row = self.connection.execute(
+                    """
+                    select status, total, recall_bucket
+                    from provider_recall_observations
+                    where provider = ?
+                      and surface_id = ?
+                    order by observed_at desc, observation_id desc
+                    limit 1
+                    """,
+                    (provider, surface["surface_id"]),
+                ).fetchone()
+                if row is None:
+                    raise SnapshotSchemaError(
+                        "snapshot serving surface lacks provider recall "
+                        f"observation for {provider}: {surface['surface_id']}"
+                    )
+                if row["status"] == "ok" and row["total"] is not None:
+                    continue
+                if row["recall_bucket"] in ("stale", "unknown"):
+                    continue
                 raise SnapshotSchemaError(
                     "snapshot serving surface lacks valid provider recall "
-                    f"observation for {provider}: {row['surface_id']}"
+                    f"observation for {provider}: {surface['surface_id']}"
                 )
+
+    def _validate_provider_sources_match_rows(self, providers: list[str]) -> None:
+        rows = self.connection.execute(
+            """
+            select distinct provider
+            from provider_recall_observations
+            order by provider
+            """
+        ).fetchall()
+        row_providers = [str(row["provider"]) for row in rows]
+        if row_providers and row_providers != providers:
+            raise SnapshotSchemaError(
+                "provider_sources meta must match exported provider rows"
+            )
 
     def _fetch_one(
         self, sql: str, parameters: tuple[object, ...]
