@@ -211,6 +211,7 @@ def test_build_snapshot_projects_release_safe_runtime_artifacts(
         meta = dict(conn.execute("select key, value from snapshot_meta").fetchall())
         assert set(meta) >= REQUIRED_SNAPSHOT_META_KEYS
         assert meta["kg_snapshot_id"] == "kg-snapshot-test"
+        assert meta["manifest_sha256"] != "0" * 64
 
         observations = conn.execute(
             "select observation_id, total, status from cts_recall_observations"
@@ -233,5 +234,81 @@ def test_build_snapshot_projects_release_safe_runtime_artifacts(
     finally:
         conn.close()
 
+    build_report = json.loads(result.build_report_path.read_text(encoding="utf-8"))
+    assert build_report["input_counts"]["jd_documents"] == 0
+    assert build_report["extracted_mention_count"] == 0
+    assert build_report["blocked_count"] == 0
+    assert build_report["relation_counts"] == {
+        "cooccurrence_edges": 1,
+        "concept_surfaces": 1,
+        "surface_relations": 1,
+    }
+    assert build_report["cts_observation_status_counts"] == {"error": 1, "ok": 1}
+    assert build_report["replay_summary"]["status"] == "not_run"
+    assert build_report["privacy_scan"]["status"] == "passed"
+    assert build_report["validation_status"] == "passed"
+
     store = SQLiteSnapshotStore.open(result.snapshot_path, result.manifest_path)
     store.close()
+
+
+def test_build_snapshot_recall_bucket_uses_latest_valid_observation_per_surface(
+    tmp_path: Path,
+) -> None:
+    build_db = tmp_path / "build.sqlite3"
+    seed_build_db(build_db)
+    store = BuildStore.open(build_db)
+    try:
+        store.insert_cts_recall_observation(
+            observation_id="obs-python-old-wide",
+            probe_job_id="probe-python",
+            surface_id="surface-python",
+            query_text="Python old",
+            query_hash="hash-python-old",
+            query_mode="keyword",
+            total=100,
+            latency_ms=10,
+            status="ok",
+            error_code=None,
+            observed_at="2026-05-01T00:00:00Z",
+            cts_api_version="fake-v1",
+            builder_run_id="run-1",
+        )
+        store.insert_cts_recall_observation(
+            observation_id="obs-python-new-zero",
+            probe_job_id="probe-python",
+            surface_id="surface-python",
+            query_text="Python exact",
+            query_hash="hash-python-exact",
+            query_mode="exact",
+            total=0,
+            latency_ms=10,
+            status="ok",
+            error_code=None,
+            observed_at="2026-06-01T00:00:00Z",
+            cts_api_version="fake-v1",
+            builder_run_id="run-1",
+        )
+    finally:
+        store.close()
+
+    result = build_runtime_snapshot(
+        build_db,
+        tmp_path / "out",
+        BuildSnapshotConfig(
+            kg_snapshot_id="kg-snapshot-test",
+            built_at=NOW,
+            source_corpus_version="corpus-2026-06-01",
+            builder_run_id="run-1",
+            cts_probe_window_start="2026-05-31T00:00:00Z",
+            cts_probe_window_end=NOW,
+        ),
+    )
+
+    conn = sqlite3.connect(result.snapshot_path)
+    try:
+        assert conn.execute(
+            "select recall_bucket from surfaces where surface_id = 'surface-python'"
+        ).fetchone() == ("zero",)
+    finally:
+        conn.close()

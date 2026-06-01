@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 from urllib.parse import quote
 
+from seektalent_keyword_graph.contracts.snapshot import manifest_identity_sha256
 from seektalent_keyword_graph.runtime.errors import (
     SnapshotChecksumError,
     SnapshotFormatError,
@@ -58,6 +59,8 @@ class SQLiteSnapshotStore:
             conn.execute("pragma foreign_keys = on")
             store = cls(conn, path)
             store.validate()
+            if manifest_path is not None:
+                store._validate_manifest_identity(Path(manifest_path))
         except SnapshotPrivacyError:
             raise
         except SnapshotChecksumError:
@@ -270,16 +273,20 @@ class SQLiteSnapshotStore:
     ) -> list[dict[str, object]]:
         return [dict(row) for row in self.connection.execute(sql, parameters).fetchall()]
 
+    def _validate_manifest_identity(self, manifest_path: Path) -> None:
+        manifest = _read_manifest_payload(manifest_path)
+        expected = self.meta()["manifest_sha256"]
+        actual = manifest_identity_sha256(manifest)
+        if actual != expected:
+            raise SnapshotChecksumError(
+                f"manifest identity sha256 mismatch: expected {expected}, got {actual}"
+            )
+
 
 def _validate_manifest_checksum(snapshot_path: Path, manifest_path: Path) -> None:
     if not manifest_path.is_file():
         raise SnapshotChecksumError(f"manifest file does not exist: {manifest_path}")
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SnapshotChecksumError(f"manifest is not valid JSON: {manifest_path}") from exc
-    if not isinstance(manifest, dict):
-        raise SnapshotChecksumError("manifest must be a JSON object")
+    manifest = _read_manifest_payload(manifest_path)
 
     digest = hashlib.sha256(snapshot_path.read_bytes()).hexdigest()
     expected = _snapshot_checksum_from_manifest(manifest, snapshot_path)
@@ -294,6 +301,16 @@ def _validate_manifest_checksum(snapshot_path: Path, manifest_path: Path) -> Non
         raise SnapshotChecksumError(
             f"snapshot byte size mismatch: expected {expected_size}, got {actual_size}"
         )
+
+
+def _read_manifest_payload(manifest_path: Path) -> dict[str, object]:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SnapshotChecksumError(f"manifest is not valid JSON: {manifest_path}") from exc
+    if not isinstance(manifest, dict):
+        raise SnapshotChecksumError("manifest must be a JSON object")
+    return manifest
 
 
 def _snapshot_checksum_from_manifest(

@@ -124,6 +124,33 @@ def test_validate_snapshot_rejects_changed_snapshot_bytes(tmp_path: Path) -> Non
     assert any("sha256 mismatch" in error.message for error in validation.errors)
 
 
+def test_validate_snapshot_rejects_manifest_identity_meta_mismatch(
+    tmp_path: Path,
+) -> None:
+    result = make_valid_snapshot(tmp_path)
+    conn = sqlite3.connect(result.snapshot_path)
+    try:
+        conn.execute(
+            "update snapshot_meta set value = ? where key = ?",
+            ("f" * 64, "manifest_sha256"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validation = validate_snapshot(
+        result.snapshot_path,
+        result.manifest_path,
+        compressed_snapshot_path=result.compressed_snapshot_path,
+    )
+
+    assert not validation.ok
+    assert any(
+        "manifest identity sha256 mismatch" in error.message
+        for error in validation.errors
+    )
+
+
 def test_validate_snapshot_rejects_oversized_compressed_artifact(
     tmp_path: Path,
 ) -> None:

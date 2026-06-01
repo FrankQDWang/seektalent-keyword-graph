@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+import copy
+import hashlib
+import json
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, model_validator
 
@@ -55,3 +58,28 @@ class SnapshotManifest(ContractModel):
             raise ValueError("artifacts, byte_sizes, and sha256 keys must match")
 
         return self
+
+
+def manifest_identity_sha256(payload: dict[str, Any]) -> str:
+    """Return the non-circular manifest identity digest embedded in snapshots."""
+
+    return hashlib.sha256(_manifest_identity_bytes(payload)).hexdigest()
+
+
+def _manifest_identity_bytes(payload: dict[str, Any]) -> bytes:
+    identity_payload = copy.deepcopy(payload)
+    sha256 = identity_payload.get("sha256")
+    if isinstance(sha256, dict):
+        identity_payload["sha256"] = dict.fromkeys(sorted(sha256), "0" * 64)
+    byte_sizes = identity_payload.get("byte_sizes")
+    if isinstance(byte_sizes, dict):
+        identity_payload["byte_sizes"] = dict.fromkeys(sorted(byte_sizes), 0)
+    return (
+        json.dumps(
+            identity_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+        + "\n"
+    ).encode("utf-8")

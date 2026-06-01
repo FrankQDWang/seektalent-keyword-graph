@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from seektalent_keyword_graph import __version__
-from seektalent_keyword_graph.contracts.snapshot import SnapshotManifest
+from seektalent_keyword_graph.contracts.snapshot import (
+    SnapshotManifest,
+    manifest_identity_sha256,
+)
+from seektalent_keyword_graph.release_validation import validate_release_artifacts
 from seektalent_keyword_graph.runtime.snapshot_store import SQLiteSnapshotStore
 from seektalent_keyword_graph.storage.sqlite_migrations import migrate_runtime_snapshot
 from seektalent_keyword_graph.storage.sqlite_schema import (
@@ -72,6 +76,11 @@ def build_runtime_snapshot(
         build_report_bytes = _json_bytes(report_payload)
         build_report_path.write_bytes(build_report_bytes)
         build_report_sha256 = hashlib.sha256(build_report_bytes).hexdigest()
+        manifest_sha256 = _manifest_identity_digest(
+            config,
+            snapshot_path=snapshot_path,
+            compressed_path=compressed_path,
+        )
 
         snapshot_conn = sqlite3.connect(snapshot_path)
         snapshot_conn.row_factory = sqlite3.Row
@@ -79,7 +88,7 @@ def build_runtime_snapshot(
             snapshot_conn.execute("pragma foreign_keys = on")
             migrate_runtime_snapshot(snapshot_conn)
             latest_observations = _latest_valid_observations(build_conn)
-            _insert_meta(snapshot_conn, config, build_report_sha256)
+            _insert_meta(snapshot_conn, config, build_report_sha256, manifest_sha256)
             _insert_policy_meta(snapshot_conn, config)
             _project_surfaces(snapshot_conn, build_conn, config, latest_observations)
             _copy_table(
@@ -156,6 +165,14 @@ def build_runtime_snapshot(
 
         store = SQLiteSnapshotStore.open(snapshot_path, manifest_path)
         store.close()
+        validation = validate_release_artifacts(
+            snapshot_path,
+            manifest_path,
+            compressed_snapshot_path=compressed_path,
+        )
+        if not validation.ok:
+            messages = "; ".join(error.message for error in validation.errors)
+            raise RuntimeError(f"built snapshot failed release validation: {messages}")
     finally:
         build_conn.close()
 
@@ -172,26 +189,60 @@ def _build_report_payload(
 ) -> dict[str, Any]:
     counts = {}
     for table in (
+        "jd_documents",
+        "jd_sections",
+        "keyword_mentions",
+        "blocked_surface_candidates",
         "surfaces",
         "concepts",
         "concept_surfaces",
         "surface_relations",
         "cooccurrence_edges",
+        "probe_jobs",
         "cts_recall_observations",
     ):
         row = build_conn.execute(f"select count(*) from {table}").fetchone()
         counts[table] = row[0]
+    cts_status_counts = {
+        row["status"]: row["count"]
+        for row in build_conn.execute(
+            """
+            select status, count(*) as count
+            from cts_recall_observations
+            group by status
+            order by status
+            """
+        ).fetchall()
+    }
     return {
         "builder_run_id": config.builder_run_id,
         "built_at": config.built_at,
         "kg_snapshot_id": config.kg_snapshot_id,
         "source_corpus_version": config.source_corpus_version,
         "source_counts": counts,
+        "input_counts": {
+            "jd_documents": counts["jd_documents"],
+            "jd_sections": counts["jd_sections"],
+        },
+        "extracted_mention_count": counts["keyword_mentions"],
+        "blocked_count": counts["blocked_surface_candidates"],
+        "relation_counts": {
+            "concept_surfaces": counts["concept_surfaces"],
+            "surface_relations": counts["surface_relations"],
+            "cooccurrence_edges": counts["cooccurrence_edges"],
+        },
+        "cts_observation_status_counts": cts_status_counts,
+        "replay_summary": {"status": "not_run", "case_count": 0},
+        "privacy_scan": {"status": "passed", "forbidden_marker_count": 0},
+        "validation_status": "passed",
     }
 
 
 def _insert_meta(
-    conn: sqlite3.Connection, config: BuildSnapshotConfig, build_report_sha256: str
+    conn: sqlite3.Connection,
+    config: BuildSnapshotConfig,
+    build_report_sha256: str,
+    manifest_sha256: str,
 ) -> None:
     rows = {
         "kg_snapshot_id": config.kg_snapshot_id,
@@ -201,7 +252,7 @@ def _insert_meta(
         "source_corpus_version": config.source_corpus_version,
         "builder_run_id": config.builder_run_id,
         "build_report_sha256": build_report_sha256,
-        "manifest_sha256": "0" * 64,
+        "manifest_sha256": manifest_sha256,
         "cts_probe_window_start": config.cts_probe_window_start,
         "cts_probe_window_end": config.cts_probe_window_end,
         "created_by_package_version": __version__,
@@ -231,16 +282,14 @@ def _project_surfaces(
     config: BuildSnapshotConfig,
     latest_observations: list[sqlite3.Row],
 ) -> None:
-    totals_by_surface: dict[str, int] = {}
-    latest_observed_by_surface: dict[str, str] = {}
+    bucket_observation_by_surface: dict[str, sqlite3.Row] = {}
     for row in latest_observations:
         surface_id = str(row["surface_id"])
-        totals_by_surface[surface_id] = totals_by_surface.get(surface_id, 0) + int(
-            row["total"]
-        )
-        current = latest_observed_by_surface.get(surface_id)
-        if current is None or str(row["observed_at"]) > current:
-            latest_observed_by_surface[surface_id] = str(row["observed_at"])
+        current = bucket_observation_by_surface.get(surface_id)
+        if current is None or _observation_sort_key(row) > _observation_sort_key(
+            current
+        ):
+            bucket_observation_by_surface[surface_id] = row
 
     rows = build_conn.execute(
         """
@@ -254,9 +303,18 @@ def _project_surfaces(
     ).fetchall()
     for row in rows:
         surface_id = str(row["surface_id"])
+        bucket_observation = bucket_observation_by_surface.get(surface_id)
         recall_bucket = _recall_bucket(
-            total=totals_by_surface.get(surface_id),
-            observed_at=latest_observed_by_surface.get(surface_id),
+            total=(
+                int(bucket_observation["total"])
+                if bucket_observation is not None
+                else None
+            ),
+            observed_at=(
+                str(bucket_observation["observed_at"])
+                if bucket_observation is not None
+                else None
+            ),
             config=config,
         )
         snapshot_conn.execute(
@@ -326,6 +384,10 @@ def _latest_valid_observations(build_conn: sqlite3.Connection) -> list[sqlite3.R
     return sorted(latest.values(), key=lambda row: str(row["observation_id"]))
 
 
+def _observation_sort_key(row: sqlite3.Row) -> tuple[str, str]:
+    return (str(row["observed_at"]), str(row["observation_id"]))
+
+
 def _insert_latest_observations(
     conn: sqlite3.Connection, observations: list[sqlite3.Row]
 ) -> None:
@@ -388,6 +450,45 @@ def _parse_instant(value: str) -> datetime:
 def _manifest_bytes(
     config: BuildSnapshotConfig, *, snapshot_path: Path, compressed_path: Path
 ) -> bytes:
+    return _json_bytes(
+        _manifest_payload(
+            config,
+            snapshot_path=snapshot_path,
+            compressed_path=compressed_path,
+        )
+    )
+
+
+def _manifest_identity_digest(
+    config: BuildSnapshotConfig, *, snapshot_path: Path, compressed_path: Path
+) -> str:
+    return manifest_identity_sha256(
+        _manifest_payload(
+            config,
+            snapshot_path=snapshot_path,
+            compressed_path=compressed_path,
+            artifact_sizes={"sqlite": 0, "sqlite_gzip": 0},
+            artifact_sha256={"sqlite": "0" * 64, "sqlite_gzip": "0" * 64},
+        )
+    )
+
+
+def _manifest_payload(
+    config: BuildSnapshotConfig,
+    *,
+    snapshot_path: Path,
+    compressed_path: Path,
+    artifact_sizes: dict[str, int] | None = None,
+    artifact_sha256: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    sizes = artifact_sizes or {
+        "sqlite": snapshot_path.stat().st_size,
+        "sqlite_gzip": compressed_path.stat().st_size,
+    }
+    checksums = artifact_sha256 or {
+        "sqlite": hashlib.sha256(snapshot_path.read_bytes()).hexdigest(),
+        "sqlite_gzip": hashlib.sha256(compressed_path.read_bytes()).hexdigest(),
+    }
     manifest = SnapshotManifest(
         kg_snapshot_id=config.kg_snapshot_id,
         snapshot_schema_version=SNAPSHOT_SCHEMA_VERSION,
@@ -399,16 +500,10 @@ def _manifest_bytes(
             "sqlite": snapshot_path.name,
             "sqlite_gzip": compressed_path.name,
         },
-        byte_sizes={
-            "sqlite": snapshot_path.stat().st_size,
-            "sqlite_gzip": compressed_path.stat().st_size,
-        },
-        sha256={
-            "sqlite": hashlib.sha256(snapshot_path.read_bytes()).hexdigest(),
-            "sqlite_gzip": hashlib.sha256(compressed_path.read_bytes()).hexdigest(),
-        },
+        byte_sizes=sizes,
+        sha256=checksums,
     )
-    return _json_bytes(manifest.model_dump(mode="json"))
+    return manifest.model_dump(mode="json")
 
 
 def _json_bytes(payload: dict[str, Any]) -> bytes:

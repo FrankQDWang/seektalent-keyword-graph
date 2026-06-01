@@ -11,7 +11,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from seektalent_keyword_graph.contracts.snapshot import SnapshotManifest
+from seektalent_keyword_graph.contracts.snapshot import (
+    SnapshotManifest,
+    manifest_identity_sha256,
+)
 from seektalent_keyword_graph.runtime.errors import SnapshotError
 from seektalent_keyword_graph.runtime.snapshot_store import SQLiteSnapshotStore
 
@@ -126,6 +129,8 @@ def validate_release_artifacts(
     store = _open_runtime_snapshot(snapshot, errors)
     if store is not None:
         try:
+            if manifest_payload is not None:
+                _validate_manifest_identity_meta(store, manifest_payload, errors)
             _validate_serving_surface_policy(store, errors)
         finally:
             store.close()
@@ -283,13 +288,14 @@ def _validate_serving_surface_policy(
         from surfaces s
         where s.serving_status = 'active'
           and s.query_safe = 1
+          and s.recall_bucket not in ('unknown', 'stale')
           and not exists (
             select 1
             from cts_recall_observations o
             where o.surface_id = s.surface_id
               and o.status = 'ok'
               and o.total is not null
-          )
+            )
         order by s.surface_id
         """
     ).fetchall()
@@ -304,23 +310,22 @@ def _validate_serving_surface_policy(
             )
         )
 
-    bucket_rows = store.connection.execute(
-        """
-        select surface_id, recall_bucket
-        from surfaces
-        where serving_status = 'active'
-          and query_safe = 1
-          and recall_bucket in ('unknown', 'stale')
-        order by surface_id
-        """
-    ).fetchall()
-    for row in bucket_rows:
+
+def _validate_manifest_identity_meta(
+    store: SQLiteSnapshotStore,
+    manifest_payload: dict[str, Any],
+    errors: list[ReleaseValidationError],
+) -> None:
+    meta = store.meta()
+    expected = meta.get("manifest_sha256")
+    actual = manifest_identity_sha256(manifest_payload)
+    if expected != actual:
         errors.append(
             ReleaseValidationError(
-                code="serving_surface_policy_error",
+                code="manifest_identity_sha256_mismatch",
                 message=(
-                    "serving surface has non-release recall bucket: "
-                    f"{row['surface_id']} ({row['recall_bucket']})"
+                    "manifest identity sha256 mismatch: "
+                    f"expected {expected}, got {actual}"
                 ),
             )
         )

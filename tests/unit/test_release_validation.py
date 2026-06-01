@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import gzip
+import hashlib
+import json
 import sqlite3
 from pathlib import Path
 
@@ -157,7 +160,7 @@ def test_release_validation_rejects_serving_surface_without_valid_policy_observa
     try:
         conn.execute("delete from cts_recall_observations")
         conn.execute(
-            "update surfaces set recall_bucket = 'unknown' "
+            "update surfaces set recall_bucket = 'healthy' "
             "where surface_id = 'surface-1'"
         )
         conn.commit()
@@ -172,3 +175,49 @@ def test_release_validation_rejects_serving_surface_without_valid_policy_observa
 
     assert not result.ok
     assert any("valid recall observation" in error.message for error in result.errors)
+
+
+@pytest.mark.parametrize("recall_bucket", ["stale", "unknown"])
+def test_release_validation_accepts_explicit_stale_or_unknown_policy_bucket(
+    valid_artifacts, recall_bucket: str
+) -> None:
+    conn = sqlite3.connect(valid_artifacts.snapshot_path)
+    try:
+        conn.execute("delete from cts_recall_observations")
+        conn.execute(
+            "update surfaces set recall_bucket = ? where surface_id = 'surface-1'",
+            (recall_bucket,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    _refresh_artifact_checksums(valid_artifacts)
+
+    result = validate_release_artifacts(
+        valid_artifacts.snapshot_path,
+        valid_artifacts.manifest_path,
+        compressed_snapshot_path=valid_artifacts.compressed_snapshot_path,
+    )
+
+    assert result.ok
+
+
+def _refresh_artifact_checksums(artifacts) -> None:
+    artifacts.compressed_snapshot_path.write_bytes(
+        gzip.compress(artifacts.snapshot_path.read_bytes(), mtime=0)
+    )
+    manifest = json.loads(artifacts.manifest_path.read_text(encoding="utf-8"))
+    manifest["byte_sizes"]["sqlite"] = artifacts.snapshot_path.stat().st_size
+    manifest["byte_sizes"]["sqlite_gzip"] = (
+        artifacts.compressed_snapshot_path.stat().st_size
+    )
+    manifest["sha256"]["sqlite"] = hashlib.sha256(
+        artifacts.snapshot_path.read_bytes()
+    ).hexdigest()
+    manifest["sha256"]["sqlite_gzip"] = hashlib.sha256(
+        artifacts.compressed_snapshot_path.read_bytes()
+    ).hexdigest()
+    artifacts.manifest_path.write_text(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
