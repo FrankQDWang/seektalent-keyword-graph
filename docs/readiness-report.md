@@ -1,6 +1,6 @@
 # Readiness Report
 
-Verified implementation HEAD: `f305b0b682572e0f22cdb00b53980fed1e17c535`
+Verified implementation HEAD: `fcf1ed4fa215a0ec8d4e3a18bc849bff95b6e47e`
 Note: A later report-refresh commit may store this generated report; the verified implementation HEAD above is the code revision checked.
 Overall status: complete
 
@@ -23,7 +23,7 @@ Overall status: complete
 - Command: `uv sync --extra dev --extra builder`
   Exit code: 0
   Status: success
-  First meaningful output line: Resolved 24 packages in 5ms
+  First meaningful output line: Resolved 24 packages in 4ms
 - Command: `uv run pytest`
   Exit code: 0
   Status: success
@@ -63,7 +63,7 @@ Overall status: complete
 - Command: `uv run keyword-graph validate-snapshot --snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3' --manifest '/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json' --compressed-snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz'`
   Exit code: 0
   Status: success
-  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "7a61d631dc68975741db677837194a2eb2358a0052826623acf7e75b74297dad", "manifest": "/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "b7db4d14e82e722858b7ba363ffb42daec634493cf047741f175842fd2974fc8", "status": "ok"}
+  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "dcddc9f4598281c2bd6de5eabe50427799b902c147edd43b22e006163ed58a6c", "manifest": "/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "a948b3af812fad7fcca53a0ed9bd15a8227ee105ac638d5622407cb1dfb49918", "status": "ok"}
 
 ## Query Recall Optimization Status
 
