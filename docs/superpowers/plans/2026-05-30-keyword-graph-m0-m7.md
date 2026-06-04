@@ -2875,13 +2875,12 @@ Expected:
 Run:
 
 ```bash
-rg -n "seektalent-keyword-intel|seektalent_keyword_intel|KEYWORD_INTEL|keyword_intelligence" \
-  README.md GOAL.md AGENTS.md pyproject.toml src tests contracts scripts
+uv run python -c 'import subprocess; from scripts.write_readiness_report import OLD_NAME_SCAN_SPEC; raise SystemExit(subprocess.run(list(OLD_NAME_SCAN_SPEC.argv)).returncode)'
 ```
 
 Expected:
 
-- Exit 1 with no matches.
+- The delegated old-name scan exits 1 with no matches.
 
 - [ ] **Step 5: Create readiness report writer**
 

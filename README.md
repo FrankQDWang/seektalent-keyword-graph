@@ -17,7 +17,7 @@ seektalent-keyword-graph
 第一阶段做一个可安装的小包：
 
 - 离线构建：我们使用内部 CTS key 对词面做低速、受控、count-only 探测，生成 SQLite snapshot。
-- 本地运行：用户安装 package 和 snapshot 后，SeekTalent 调用本地函数，输入 JD / RequirementSheet / notes，输出 query bundles。
+- 本地运行：用户安装 package 和 snapshot 后，SeekTalent 调用本地函数，输入 JD / RequirementSheet / notes 输出 query bundles，或输入已生成的 query term pool 输出 provider-aware Query Recall Optimization 建议。
 - 数据分发：同一个独立 repo 发布 Python package、压缩后的关键词图谱 snapshot、manifest 和 checksum。snapshot 不包含 CTS key，不包含原始简历正文，不要求用户实时访问 CTS。
 - Snapshot 节奏：手动发布 candidate snapshot，稳定后目标两周一次；压缩后软目标 `<50MB`，硬上限 `<100MB`。
 - CTS 节奏：真实 CTS count probe 第一版按 `1 RPS / 并发 1` 起步，只在 09:00-21:00 运行，夜间暂停；不设固定 daily cap。
@@ -27,8 +27,8 @@ seektalent-keyword-graph
 
 本包严格按第一阶段范围设计：
 
-- 做：关键词、关键词别名、关键词共现、JD 中的关键词证据、CTS `data.total` 召回数量、关键词可搜性画像、对 SeekTalent 暴露本地 query bundle 推荐接口。
-- 不做：公司图谱、行业 / 领域图谱、组织部门图谱、候选人关系图谱、完整简历语义索引、用户侧实时 CTS 探测、常驻 API 服务、后台 UI。
+- 做：关键词、关键词别名、关键词共现、JD 中的关键词证据、provider-aware 召回数量与状态、关键词可搜性画像、对 SeekTalent 暴露本地 query bundle 推荐接口和 query term pool recall optimization 接口。
+- 不做：公司图谱、行业 / 领域图谱、组织部门图谱、候选人关系图谱、完整简历语义索引、用户侧实时 CTS / 猎聘 / Boss 探测、常驻 API 服务、后台 UI。
 - 保留扩展点：后续可以增加服务化部署或更多节点类型，但第一阶段 package、snapshot schema、评估都不依赖这些扩展。
 
 ## 目录

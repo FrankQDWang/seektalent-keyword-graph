@@ -1,0 +1,263 @@
+{
+  "concept_sheet": [
+    {
+      "canonical_label": "Kubernetes",
+      "concept_id": "concept:kubernetes",
+      "concept_type": "tool",
+      "confidence": 1.0,
+      "matched_terms": [
+        "Kubernetes"
+      ],
+      "recall_bucket": "too_wide",
+      "requirement_strength": "required",
+      "selected_surfaces": [
+        "Kubernetes",
+        "Docker"
+      ]
+    },
+    {
+      "canonical_label": "Python 3",
+      "concept_id": "concept:python 3",
+      "concept_type": "language",
+      "confidence": 1.0,
+      "matched_terms": [
+        "Python 3"
+      ],
+      "recall_bucket": "healthy",
+      "requirement_strength": "required",
+      "selected_surfaces": [
+        "Python 3"
+      ]
+    },
+    {
+      "canonical_label": "React",
+      "concept_id": "concept:react",
+      "concept_type": "framework",
+      "confidence": 1.0,
+      "matched_terms": [
+        "React"
+      ],
+      "recall_bucket": "zero",
+      "requirement_strength": "required",
+      "selected_surfaces": [
+        "React",
+        "React.js"
+      ]
+    },
+    {
+      "canonical_label": "Kafka",
+      "concept_id": "concept:kafka",
+      "concept_type": "tool",
+      "confidence": 1.0,
+      "matched_terms": [
+        "Kafka"
+      ],
+      "recall_bucket": "stale",
+      "requirement_strength": "preferred",
+      "selected_surfaces": [
+        "Kafka",
+        "Apache Kafka"
+      ]
+    },
+    {
+      "canonical_label": "LLMOps",
+      "concept_id": "concept:llmops",
+      "concept_type": "tool",
+      "confidence": 1.0,
+      "matched_terms": [
+        "LLMOps"
+      ],
+      "recall_bucket": "unknown",
+      "requirement_strength": "preferred",
+      "selected_surfaces": [
+        "LLMOps"
+      ]
+    }
+  ],
+  "kg_snapshot_id": "kg-eval-fixture",
+  "lineage": {
+    "input_hash": "sha256:58c606a0fdc0aa4b835b2dec956ac5913f1750ef09e9e25e5eaa9ab074c6110c",
+    "selection_policy_version": "policy-v1",
+    "snapshot_schema_version": "snapshot-v1",
+    "source_refs": [
+      "request:plan-full-bundle-matrix",
+      "snapshot:kg-eval-fixture",
+      "requirement:python 3",
+      "requirement:kubernetes",
+      "requirement:react",
+      "requirement:kafka",
+      "requirement:llmops",
+      "requirement:acme corp",
+      "requirement:platform team"
+    ]
+  },
+  "query_bundles": [
+    {
+      "bundle_type": "anchor",
+      "label": "Python 3 anchor",
+      "priority": 1,
+      "queries": [
+        {
+          "priority": 1,
+          "query_mode": "exact",
+          "query_text": "\"Python 3\"",
+          "reason": "Required or extracted concept with healthy observed recall.",
+          "recall_bucket": "healthy",
+          "source_concept_ids": [
+            "concept:python 3"
+          ],
+          "surfaces": [
+            "Python 3"
+          ]
+        }
+      ],
+      "rationale": "Selected graph surface has healthy observed recall.",
+      "source_concept_ids": [
+        "concept:python 3"
+      ],
+      "warnings": []
+    },
+    {
+      "bundle_type": "precision",
+      "label": "Kubernetes precision",
+      "priority": 2,
+      "queries": [
+        {
+          "priority": 1,
+          "query_mode": "boolean",
+          "query_text": "\"Kubernetes\" \"Docker\"",
+          "reason": "Too-wide surface paired with a trusted companion term.",
+          "recall_bucket": "too_wide",
+          "source_concept_ids": [
+            "concept:kubernetes",
+            "concept:docker"
+          ],
+          "surfaces": [
+            "Kubernetes",
+            "Docker"
+          ]
+        }
+      ],
+      "rationale": "Companion term narrows a high-recall surface.",
+      "source_concept_ids": [
+        "concept:kubernetes",
+        "concept:docker"
+      ],
+      "warnings": []
+    },
+    {
+      "bundle_type": "alias_probe",
+      "label": "React alias probe",
+      "priority": 3,
+      "queries": [
+        {
+          "priority": 1,
+          "query_mode": "exact",
+          "query_text": "\"React.js\"",
+          "reason": "Primary surface has weak recall; active alias is safer to probe.",
+          "recall_bucket": "zero",
+          "source_concept_ids": [
+            "concept:react"
+          ],
+          "surfaces": [
+            "React.js"
+          ]
+        }
+      ],
+      "rationale": "Alias relation provides an alternative graph-backed surface.",
+      "source_concept_ids": [
+        "concept:react"
+      ],
+      "warnings": []
+    },
+    {
+      "bundle_type": "alias_probe",
+      "label": "Kafka alias probe",
+      "priority": 4,
+      "queries": [
+        {
+          "priority": 1,
+          "query_mode": "exact",
+          "query_text": "\"Apache Kafka\"",
+          "reason": "Primary surface has weak recall; active alias is safer to probe.",
+          "recall_bucket": "stale",
+          "source_concept_ids": [
+            "concept:kafka"
+          ],
+          "surfaces": [
+            "Apache Kafka"
+          ]
+        }
+      ],
+      "rationale": "Alias relation provides an alternative graph-backed surface.",
+      "source_concept_ids": [
+        "concept:kafka"
+      ],
+      "warnings": [
+        "stale_observation"
+      ]
+    },
+    {
+      "bundle_type": "exploration",
+      "label": "LLMOps exploration",
+      "priority": 5,
+      "queries": [
+        {
+          "priority": 1,
+          "query_mode": "exact",
+          "query_text": "\"LLMOps\"",
+          "reason": "Safe graph-backed term has unknown observed recall.",
+          "recall_bucket": "unknown",
+          "source_concept_ids": [
+            "concept:llmops"
+          ],
+          "surfaces": [
+            "LLMOps"
+          ]
+        }
+      ],
+      "rationale": "Exploration keeps emerging graph evidence visible.",
+      "source_concept_ids": [
+        "concept:llmops"
+      ],
+      "warnings": [
+        "unknown_observation"
+      ]
+    }
+  ],
+  "rejected_surfaces": [
+    {
+      "evidence": "Acme Corp classified as company_like.",
+      "normalized_surface": "acme corp",
+      "reason_code": "company_like",
+      "source": "requirement",
+      "surface_text": "Acme Corp"
+    },
+    {
+      "evidence": "Platform Team classified as department_like.",
+      "normalized_surface": "platform team",
+      "reason_code": "department_like",
+      "source": "requirement",
+      "surface_text": "Platform Team"
+    }
+  ],
+  "request_id": "plan-full-bundle-matrix",
+  "schema_version": "query-plan-response-v1",
+  "selection_policy_version": "policy-v1",
+  "warnings": [
+    {
+      "code": "stale_observation",
+      "message": "Selected surface has a stale recall observation.",
+      "source_terms": [
+        "Kafka"
+      ]
+    },
+    {
+      "code": "unknown_observation",
+      "message": "Selected surface has an unknown recall observation.",
+      "source_terms": [
+        "LLMOps"
+      ]
+    }
+  ]
+}

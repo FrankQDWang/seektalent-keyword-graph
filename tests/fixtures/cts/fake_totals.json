@@ -1,0 +1,25 @@
+{
+  "queries": {
+    "python": {
+      "total": 42
+    },
+    "no recall": {
+      "total": 0
+    },
+    "slow query": {
+      "status": "timeout"
+    },
+    "rate limited": {
+      "status": "rate_limited"
+    },
+    "server unhappy": {
+      "status": "server_error"
+    },
+    "bad credentials": {
+      "status": "auth_error"
+    },
+    "network down": {
+      "status": "network_error"
+    }
+  }
+}

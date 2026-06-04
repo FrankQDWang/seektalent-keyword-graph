@@ -1,0 +1,36 @@
+{
+  "max_alternatives": 10,
+  "max_precision_companions": 3,
+  "provider": "cts",
+  "query_mode": "keyword",
+  "query_terms": [
+    {
+      "source": "query_term_pool",
+      "strength": "required",
+      "text": "React"
+    },
+    {
+      "source": "query_term_pool",
+      "strength": "required",
+      "text": "Kubernetes"
+    },
+    {
+      "source": "query_term_pool",
+      "strength": "required",
+      "text": "Kafka"
+    },
+    {
+      "source": "query_term_pool",
+      "strength": "preferred",
+      "text": "LLMOps"
+    },
+    {
+      "source": "query_term_pool",
+      "strength": "preferred",
+      "text": "GhostLang"
+    }
+  ],
+  "query_text": null,
+  "request_id": "recall-cts-term-pool",
+  "schema_version": "query-recall-request-v1"
+}

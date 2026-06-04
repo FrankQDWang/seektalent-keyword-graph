@@ -1,0 +1,6 @@
+{"source":"fixture","source_ref":"jd-python-ml","title":"Senior ML Engineer","text":"Company: Acme AI\nDepartment: Platform Engineering\nRequirements:\nMust have Python 3, SQL, PyTorch and machine learning experience.\nFamiliar with Spark is required.\nPreferred:\nNice to have Kubernetes and AWS Certified Solutions Architect.\nBenefits: salary 50k-70k in Shanghai.","captured_at":"2026-05-31T00:00:00Z"}
+{"source":"fixture","source_ref":"jd-python-ml-copy","title":"Duplicate ML Engineer","text":"Company: Acme AI\nDepartment: Platform Engineering\nRequirements:\nMust have Python 3, SQL, PyTorch and machine learning experience.\nFamiliar with Spark is required.\nPreferred:\nNice to have Kubernetes and AWS Certified Solutions Architect.\nBenefits: salary 50k-70k in Shanghai.","captured_at":"2026-05-31T00:00:00Z"}
+{"source":"fixture","source_ref":"jd-cn-frontend","title":"前端工程师","text":"岗位职责：\n负责 Vue 3 和 TypeScript 前端开发，与数据科学团队合作。\n任职要求：\n必须熟悉 JavaScript、React、Node.js，了解 Spring Cloud。\n加分项：\n优先考虑熟悉 Docker、Kubernetes 的候选人。\n公司：星河科技\n地点：北京\n福利：薪资 30k-45k。","captured_at":"2026-05-31T00:00:00Z"}
+{"source":"fixture","source_ref":"bad-missing-text","title":"Broken JD","captured_at":"2026-05-31T00:00:00Z"}
+{"source":"fixture","source_ref":"bad-empty-text","title":"Empty JD","text":"   ","captured_at":"2026-05-31T00:00:00Z"}
+{not valid json

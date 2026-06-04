@@ -1,0 +1,46 @@
+{
+  "include_exploration": true,
+  "jd_text": null,
+  "max_query_bundles": 10,
+  "notes": [],
+  "request_id": "plan-full-bundle-matrix",
+  "requirement_terms": [
+    {
+      "source": "requirement",
+      "strength": "required",
+      "text": "Python 3"
+    },
+    {
+      "source": "requirement",
+      "strength": "required",
+      "text": "Kubernetes"
+    },
+    {
+      "source": "requirement",
+      "strength": "required",
+      "text": "React"
+    },
+    {
+      "source": "requirement",
+      "strength": "preferred",
+      "text": "Kafka"
+    },
+    {
+      "source": "requirement",
+      "strength": "preferred",
+      "text": "LLMOps"
+    },
+    {
+      "source": "requirement",
+      "strength": "preferred",
+      "text": "Acme Corp"
+    },
+    {
+      "source": "requirement",
+      "strength": "preferred",
+      "text": "Platform Team"
+    }
+  ],
+  "schema_version": "query-plan-request-v1",
+  "title": null
+}

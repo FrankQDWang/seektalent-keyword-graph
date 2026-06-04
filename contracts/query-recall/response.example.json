@@ -1,0 +1,541 @@
+{
+  "alternatives": [
+    {
+      "confidence": 0.95,
+      "evidence_ref": "relation:eval:alias:React:Reactjs",
+      "evidence_type": "eval_fixture_enrichment",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:react.js",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:react.js",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:react.js",
+        "query_mode": "keyword",
+        "query_text": "React.js",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:react.js",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "React.js",
+      "relation_type": "alias",
+      "source_concept_id": "concept:react",
+      "source_surface_id": "surface:react",
+      "surface_id": "surface:react.js",
+      "target_surface_id": "surface:react.js"
+    },
+    {
+      "confidence": 1.0,
+      "evidence_ref": "cooccur:jd:8451db0572c7d8d6",
+      "evidence_type": "jd",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:docker",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:docker",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:docker",
+        "query_mode": "keyword",
+        "query_text": "Docker",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:docker",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "Docker",
+      "relation_type": "cooccurrence",
+      "source_concept_id": "concept:kubernetes",
+      "source_surface_id": "surface:kubernetes",
+      "surface_id": "surface:docker",
+      "target_surface_id": "surface:docker"
+    },
+    {
+      "confidence": 0.95,
+      "evidence_ref": "relation:eval:alias:Kafka:Apache-Kafka",
+      "evidence_type": "eval_fixture_enrichment",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:apache kafka",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:apache kafka",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:apache kafka",
+        "query_mode": "keyword",
+        "query_text": "Apache Kafka",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:apache kafka",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "Apache Kafka",
+      "relation_type": "alias",
+      "source_concept_id": "concept:kafka",
+      "source_surface_id": "surface:kafka",
+      "surface_id": "surface:apache kafka",
+      "target_surface_id": "surface:apache kafka"
+    },
+    {
+      "confidence": 0.95,
+      "evidence_ref": "relation:eval:alias:AIOps:LLMOps",
+      "evidence_type": "eval_fixture_enrichment",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:aiops",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:aiops",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:aiops",
+        "query_mode": "keyword",
+        "query_text": "AIOps",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:aiops",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "AIOps",
+      "relation_type": "alias",
+      "source_concept_id": "concept:llmops",
+      "source_surface_id": "surface:llmops",
+      "surface_id": "surface:aiops",
+      "target_surface_id": "surface:aiops"
+    },
+    {
+      "confidence": 0.6666666666666666,
+      "evidence_ref": "cooccur:jd:92cb08c722f1672b",
+      "evidence_type": "jd",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:aiops",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:aiops",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:aiops",
+        "query_mode": "keyword",
+        "query_text": "AIOps",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:aiops",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "AIOps",
+      "relation_type": "cooccurrence",
+      "source_concept_id": "concept:kubernetes",
+      "source_surface_id": "surface:kubernetes",
+      "surface_id": "surface:aiops",
+      "target_surface_id": "surface:aiops"
+    },
+    {
+      "confidence": 0.6666666666666666,
+      "evidence_ref": "cooccur:jd:298516202e813044",
+      "evidence_type": "jd",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:javascript",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:javascript",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:javascript",
+        "query_mode": "keyword",
+        "query_text": "JavaScript",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:javascript",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "JavaScript",
+      "relation_type": "cooccurrence",
+      "source_concept_id": "concept:kubernetes",
+      "source_surface_id": "surface:kubernetes",
+      "surface_id": "surface:javascript",
+      "target_surface_id": "surface:javascript"
+    },
+    {
+      "confidence": 0.6666666666666666,
+      "evidence_ref": "cooccur:jd:3fe9674f552f2c01",
+      "evidence_type": "jd",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:node.js",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:node.js",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:node.js",
+        "query_mode": "keyword",
+        "query_text": "Node.js",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:node.js",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "Node.js",
+      "relation_type": "cooccurrence",
+      "source_concept_id": "concept:kubernetes",
+      "source_surface_id": "surface:kubernetes",
+      "surface_id": "surface:node.js",
+      "target_surface_id": "surface:node.js"
+    },
+    {
+      "confidence": 0.6666666666666666,
+      "evidence_ref": "cooccur:jd:95a698091273a573",
+      "evidence_type": "jd",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:python 3",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:python 3",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:python 3",
+        "query_mode": "keyword",
+        "query_text": "Python 3",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:python 3",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "Python 3",
+      "relation_type": "cooccurrence",
+      "source_concept_id": "concept:kubernetes",
+      "source_surface_id": "surface:kubernetes",
+      "surface_id": "surface:python 3",
+      "target_surface_id": "surface:python 3"
+    },
+    {
+      "confidence": 0.6666666666666666,
+      "evidence_ref": "cooccur:jd:2361ecb0787c57ba",
+      "evidence_type": "jd",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:redis",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:redis",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:redis",
+        "query_mode": "keyword",
+        "query_text": "Redis",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:redis",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "Redis",
+      "relation_type": "cooccurrence",
+      "source_concept_id": "concept:kubernetes",
+      "source_surface_id": "surface:kubernetes",
+      "surface_id": "surface:redis",
+      "target_surface_id": "surface:redis"
+    },
+    {
+      "confidence": 0.6666666666666666,
+      "evidence_ref": "cooccur:jd:5c35e161c382b98c",
+      "evidence_type": "jd",
+      "observation": {
+        "error_code": null,
+        "evidence_ref": "eval:cts:surface:spark",
+        "latency_ms": 10,
+        "observation_id": "obs:cts:surface:spark",
+        "observed_at": "2026-06-01T00:00:00Z",
+        "provider": "cts",
+        "provider_api_version": "eval-fixture",
+        "query_hash": "hash:cts:surface:spark",
+        "query_mode": "keyword",
+        "query_text": "Spark",
+        "recall_bucket": "healthy",
+        "status": "ok",
+        "surface_id": "surface:spark",
+        "total": 42
+      },
+      "query_mode": "keyword",
+      "query_text": "Spark",
+      "relation_type": "cooccurrence",
+      "source_concept_id": "concept:kubernetes",
+      "source_surface_id": "surface:kubernetes",
+      "surface_id": "surface:spark",
+      "target_surface_id": "surface:spark"
+    }
+  ],
+  "input_observations": [
+    {
+      "error_code": null,
+      "evidence_ref": "eval:cts:surface:react",
+      "latency_ms": 10,
+      "observation_id": "obs:cts:surface:react",
+      "observed_at": "2026-06-01T00:00:00Z",
+      "provider": "cts",
+      "provider_api_version": "eval-fixture",
+      "query_hash": "hash:cts:surface:react",
+      "query_mode": "keyword",
+      "query_text": "React",
+      "recall_bucket": "zero",
+      "status": "ok",
+      "surface_id": "surface:react",
+      "total": 0
+    },
+    {
+      "error_code": null,
+      "evidence_ref": "eval:cts:surface:kubernetes",
+      "latency_ms": 10,
+      "observation_id": "obs:cts:surface:kubernetes",
+      "observed_at": "2026-06-01T00:00:00Z",
+      "provider": "cts",
+      "provider_api_version": "eval-fixture",
+      "query_hash": "hash:cts:surface:kubernetes",
+      "query_mode": "keyword",
+      "query_text": "Kubernetes",
+      "recall_bucket": "too_wide",
+      "status": "ok",
+      "surface_id": "surface:kubernetes",
+      "total": 1500
+    },
+    {
+      "error_code": null,
+      "evidence_ref": "eval:cts:surface:kafka",
+      "latency_ms": 10,
+      "observation_id": "obs:cts:surface:kafka",
+      "observed_at": "2025-01-01T00:00:00Z",
+      "provider": "cts",
+      "provider_api_version": "eval-fixture",
+      "query_hash": "hash:cts:surface:kafka",
+      "query_mode": "keyword",
+      "query_text": "Kafka",
+      "recall_bucket": "stale",
+      "status": "ok",
+      "surface_id": "surface:kafka",
+      "total": 80
+    },
+    {
+      "error_code": null,
+      "evidence_ref": "eval:cts:surface:llmops",
+      "latency_ms": 10,
+      "observation_id": "obs:cts:surface:llmops",
+      "observed_at": "2026-06-01T00:00:00Z",
+      "provider": "cts",
+      "provider_api_version": "eval-fixture",
+      "query_hash": "hash:cts:surface:llmops",
+      "query_mode": "keyword",
+      "query_text": "LLMOps",
+      "recall_bucket": "unknown",
+      "status": "unknown",
+      "surface_id": "surface:llmops",
+      "total": null
+    }
+  ],
+  "kg_snapshot_id": "kg-eval-fixture",
+  "lineage": {
+    "input_hash": "sha256:b1f0c16a21170a05749650aa13eb7365d2f7aa23e7aa5d83579cf64b94a7fd50",
+    "provider_sources": [
+      "boss",
+      "cts",
+      "liepin"
+    ],
+    "selection_policy_version": "policy-v1",
+    "snapshot_schema_version": "snapshot-v1",
+    "source_refs": [
+      "request:recall-cts-term-pool",
+      "snapshot:kg-eval-fixture",
+      "provider:cts",
+      "surface:surface:react",
+      "concept:concept:react",
+      "observation:obs:cts:surface:react",
+      "surface:surface:kubernetes",
+      "concept:concept:kubernetes",
+      "observation:obs:cts:surface:kubernetes",
+      "surface:surface:kafka",
+      "concept:concept:kafka",
+      "observation:obs:cts:surface:kafka",
+      "surface:surface:llmops",
+      "concept:concept:llmops",
+      "observation:obs:cts:surface:llmops"
+    ]
+  },
+  "optimized_terms": [
+    {
+      "action": "replace",
+      "provider": "cts",
+      "query_mode": "keyword",
+      "query_text": "React.js",
+      "rank": 1,
+      "reason": "Graph alternative has healthier provider recall.",
+      "recall_bucket": "healthy",
+      "source_query_text": "React"
+    },
+    {
+      "action": "keep",
+      "provider": "cts",
+      "query_mode": "keyword",
+      "query_text": "Kubernetes",
+      "rank": 2,
+      "reason": "Original term retained while adding precision companion.",
+      "recall_bucket": "too_wide",
+      "source_query_text": "Kubernetes"
+    },
+    {
+      "action": "add_precision_companion",
+      "provider": "cts",
+      "query_mode": "keyword",
+      "query_text": "Docker",
+      "rank": 3,
+      "reason": "Input term is too wide and companion has healthier provider recall.",
+      "recall_bucket": "healthy",
+      "source_query_text": "Kubernetes"
+    },
+    {
+      "action": "replace",
+      "provider": "cts",
+      "query_mode": "keyword",
+      "query_text": "Apache Kafka",
+      "rank": 4,
+      "reason": "Graph alternative has healthier provider recall.",
+      "recall_bucket": "healthy",
+      "source_query_text": "Kafka"
+    },
+    {
+      "action": "score_only",
+      "provider": "cts",
+      "query_mode": "keyword",
+      "query_text": "LLMOps",
+      "rank": 5,
+      "reason": "Input term should contribute only as scoring context.",
+      "recall_bucket": "unknown",
+      "source_query_text": "LLMOps"
+    },
+    {
+      "action": "fallback",
+      "provider": "cts",
+      "query_mode": "keyword",
+      "query_text": "GhostLang",
+      "rank": 6,
+      "reason": "Input term had no active graph match.",
+      "recall_bucket": "unknown",
+      "source_query_text": "GhostLang"
+    }
+  ],
+  "provider": "cts",
+  "recommendations": [
+    {
+      "action": "replace",
+      "evidence_observation_ids": [
+        "obs:cts:surface:react",
+        "obs:cts:surface:react.js"
+      ],
+      "provider": "cts",
+      "query_text": "React",
+      "reason": "Graph alternative has healthier provider recall.",
+      "reason_code": "zero_recall",
+      "recommended_query_text": "React.js"
+    },
+    {
+      "action": "add_precision_companion",
+      "evidence_observation_ids": [
+        "obs:cts:surface:kubernetes",
+        "obs:cts:surface:docker"
+      ],
+      "provider": "cts",
+      "query_text": "Kubernetes",
+      "reason": "Input term is too wide and companion has healthier provider recall.",
+      "reason_code": "too_wide_recall",
+      "recommended_query_text": "Docker"
+    },
+    {
+      "action": "replace",
+      "evidence_observation_ids": [
+        "obs:cts:surface:kafka",
+        "obs:cts:surface:apache kafka"
+      ],
+      "provider": "cts",
+      "query_text": "Kafka",
+      "reason": "Graph alternative has healthier provider recall.",
+      "reason_code": "stale_observation",
+      "recommended_query_text": "Apache Kafka"
+    },
+    {
+      "action": "score_only",
+      "evidence_observation_ids": [
+        "obs:cts:surface:llmops",
+        "obs:cts:surface:aiops"
+      ],
+      "provider": "cts",
+      "query_text": "LLMOps",
+      "reason": "Input term should contribute only as scoring context.",
+      "reason_code": "unknown_observation",
+      "recommended_query_text": null
+    },
+    {
+      "action": "fallback",
+      "evidence_observation_ids": [],
+      "provider": "cts",
+      "query_text": "GhostLang",
+      "reason": "Input term had no active graph match.",
+      "reason_code": "no_match",
+      "recommended_query_text": null
+    }
+  ],
+  "request_id": "recall-cts-term-pool",
+  "schema_version": "query-recall-response-v1",
+  "selection_policy_version": "policy-v1",
+  "warnings": [
+    {
+      "code": "no_match",
+      "message": "Input term had no active graph match.",
+      "provider": "cts",
+      "query_text": "GhostLang"
+    },
+    {
+      "code": "zero_recall",
+      "message": "Input term has zero observed recall.",
+      "provider": "cts",
+      "query_text": "React"
+    },
+    {
+      "code": "too_wide_recall",
+      "message": "Input term has too-wide observed recall.",
+      "provider": "cts",
+      "query_text": "Kubernetes"
+    },
+    {
+      "code": "stale_observation",
+      "message": "Input term has a stale provider observation.",
+      "provider": "cts",
+      "query_text": "Kafka"
+    },
+    {
+      "code": "unknown_observation",
+      "message": "Input term has an unknown provider observation.",
+      "provider": "cts",
+      "query_text": "LLMOps"
+    },
+    {
+      "code": "fallback",
+      "message": "Fallback action emitted for unmatched input term.",
+      "provider": "cts",
+      "query_text": "GhostLang"
+    }
+  ]
+}

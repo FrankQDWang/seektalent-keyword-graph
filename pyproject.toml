@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "seektalent-keyword-graph"
+version = "0.1.0"
+description = "SeekTalent keyword graph runtime package and internal builder."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+builder = [
+    "httpx>=0.27",
+]
+dev = [
+    "build",
+    "hatchling",
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+keyword-graph = "seektalent_keyword_graph.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/seektalent_keyword_graph"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "PIE", "PT"]

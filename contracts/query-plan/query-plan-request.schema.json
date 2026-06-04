@@ -1,0 +1,112 @@
+{
+  "$defs": {
+    "RequirementTerm": {
+      "additionalProperties": false,
+      "description": "A normalized incoming requirement surface from the consumer.",
+      "properties": {
+        "source": {
+          "default": "requirement",
+          "enum": [
+            "requirement",
+            "title",
+            "jd_text",
+            "notes"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "strength": {
+          "default": "required",
+          "enum": [
+            "required",
+            "preferred",
+            "nice_to_have"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "RequirementTerm",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "SeekTalent-to-keyword-graph query planning request.",
+  "properties": {
+    "include_exploration": {
+      "default": true,
+      "title": "Include Exploration",
+      "type": "boolean"
+    },
+    "jd_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Jd Text"
+    },
+    "max_query_bundles": {
+      "default": 5,
+      "maximum": 20,
+      "minimum": 1,
+      "title": "Max Query Bundles",
+      "type": "integer"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "request_id": {
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "requirement_terms": {
+      "items": {
+        "$ref": "#/$defs/RequirementTerm"
+      },
+      "title": "Requirement Terms",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "query-plan-request-v1",
+      "default": "query-plan-request-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    }
+  },
+  "required": [
+    "request_id",
+    "requirement_terms"
+  ],
+  "title": "QueryPlanRequest",
+  "type": "object"
+}
