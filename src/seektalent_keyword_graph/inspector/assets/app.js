@@ -73,7 +73,7 @@ function renderResponse(payload) {
   const response = payload.response;
   const observation = response.input_observations[0] || null;
   renderKeyValues(observationEl, [
-    ["query_text", observation?.query_text],
+    ["query_text", observation?.query_text || payload.request.query_text],
     ["surface_id", observation?.surface_id],
     ["provider", response.provider],
     ["query_mode", observation?.query_mode || payload.request.query_mode],
@@ -170,7 +170,34 @@ async function submitQueryRecall(event) {
   renderResponse(body);
 }
 
+function applyUrlQueryParams() {
+  const params = new URLSearchParams(window.location.search);
+  const queryText = params.get("query_text");
+  if (!queryText) {
+    return;
+  }
+  document.querySelector("#query-text").value = queryText;
+  const provider = params.get("provider");
+  if (
+    provider &&
+    [...providerSelect.options].some((option) => option.value === provider)
+  ) {
+    providerSelect.value = provider;
+  }
+  const queryMode = params.get("query_mode");
+  if (queryMode) {
+    document.querySelector("#query-mode").value = queryMode;
+  }
+  const maxAlternatives = params.get("max_alternatives");
+  if (maxAlternatives) {
+    document.querySelector("#max-alternatives").value = maxAlternatives;
+  }
+  form.requestSubmit();
+}
+
 form.addEventListener("submit", submitQueryRecall);
-loadMeta().catch((error) => {
-  setState(`internal_error: ${error.message}`, "error");
-});
+loadMeta()
+  .then(applyUrlQueryParams)
+  .catch((error) => {
+    setState(`internal_error: ${error.message}`, "error");
+  });

@@ -23,9 +23,12 @@ def test_static_ui_renders_required_snapshot_recall_and_provenance_fields() -> N
         assert heading in index
 
     for required_source_field in (
+        "URLSearchParams(window.location.search)",
+        "applyUrlQueryParams",
         "metaPayload.snapshot.manifest_path",
         "metaPayload.meta.built_at",
         "metaPayload.providers.join",
+        "payload.request.query_text",
         "observationRow.provider",
         "alternative.evidence_type",
         "alternative.evidence_ref",
