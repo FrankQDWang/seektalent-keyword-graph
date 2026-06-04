@@ -125,6 +125,27 @@ def test_open_default_uses_dev_snapshot_override(
         graph.close()
 
 
+def test_open_default_rejects_snapshot_id_mismatch(
+    fixture_flow_result: Any,
+) -> None:
+    with pytest.raises(
+        SnapshotError,
+        match="expected snapshot id kg-other but opened kg-eval-fixture",
+    ):
+        KeywordGraph.open_default(
+            {
+                "SEEKTALENT_KEYWORD_GRAPH_MODE": "dev",
+                "SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_PATH": str(
+                    fixture_flow_result.snapshot_path
+                ),
+                "SEEKTALENT_KEYWORD_GRAPH_MANIFEST_PATH": str(
+                    fixture_flow_result.manifest_path
+                ),
+                "SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_ID": "kg-other",
+            }
+        )
+
+
 def test_open_default_uses_bundled_snapshot(
     fixture_flow_result: Any,
     tmp_path: Path,

@@ -42,7 +42,13 @@ class KeywordGraph:
                 "SEEKTALENT_KEYWORD_GRAPH_ENABLED"
             )
         location = resolve_snapshot_location(settings)
-        return cls.open(location.snapshot_path, location.manifest_path)
+        graph = cls.open(location.snapshot_path, location.manifest_path)
+        try:
+            graph._validate_expected_snapshot_id(settings.snapshot_id)
+        except Exception:
+            graph.close()
+            raise
+        return graph
 
     @classmethod
     def open_default(
@@ -52,6 +58,16 @@ class KeywordGraph:
 
     def close(self) -> None:
         self.store.close()
+
+    def _validate_expected_snapshot_id(self, expected_snapshot_id: str | None) -> None:
+        if expected_snapshot_id is None:
+            return
+        actual_snapshot_id = str(self.store.meta()["kg_snapshot_id"])
+        if actual_snapshot_id != expected_snapshot_id:
+            raise SnapshotFormatError(
+                "expected snapshot id "
+                f"{expected_snapshot_id} but opened {actual_snapshot_id}"
+            )
 
     def build_query_plan(
         self, request: QueryPlanRequest | dict[str, Any]

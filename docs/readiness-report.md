@@ -1,6 +1,6 @@
 # Readiness Report
 
-Verified implementation HEAD: `c69840ee538e63b795bbfc3444612190e079b9d5`
+Verified implementation HEAD: `bdceebae20ff10d7fab9b015433dd2672561ede6`
 Note: A later report-refresh commit may store this generated report; the verified implementation HEAD above is the code revision checked.
 Overall status: complete
 
@@ -60,7 +60,7 @@ Overall status: complete
 - Command: `uv run pytest tests/contract/test_consumer_contract.py -q`
   Exit code: 0
   Status: success
-  First meaningful output line: ..............                                                           [100%]
+  First meaningful output line: ...............                                                          [100%]
 - Command: `uv run python scripts/run_fixture_flow.py --work-dir /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow`
   Exit code: 0
   Status: success
@@ -68,7 +68,7 @@ Overall status: complete
 - Command: `uv run keyword-graph validate-snapshot --snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3 --manifest /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json --compressed-snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz`
   Exit code: 0
   Status: success
-  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "318215e3a56acb03ba5a5e42a09643164198e8584920655f72878c8013952ac6", "manifest": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "fbb5cab201ef665134e79cd9b1fd002c89b36ce0a3d15cebd4aef2903ab1520f", "status": "ok"}
+  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "180e033246eef88cbe180880983245da52a64ab16cf92186fc1ebe60cb3bd6b8", "manifest": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "3c1a47fe90d64eac34dbd4282357ca370b7d4130881b9d14591eaa8e07b38fe5", "status": "ok"}
 
 ## Query Recall Optimization Status
 

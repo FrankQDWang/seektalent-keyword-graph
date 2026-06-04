@@ -89,6 +89,22 @@ def test_built_wheel_installs_and_opens_fixture_snapshot(tmp_path: Path) -> None
 
     assert completed.stdout.strip() == "kg-eval-fixture"
 
+    bundled_completed = subprocess.run(
+        [
+            str(python),
+            "-c",
+            _BUNDLED_SMOKE_SCRIPT,
+            str(Path(__file__).resolve().parents[2]),
+        ],
+        check=True,
+        capture_output=True,
+        cwd=tmp_path,
+        env=smoke_env,
+        text=True,
+    )
+
+    assert bundled_completed.stdout.strip() == "kg-eval-fixture"
+
 
 def _venv_site_packages(python: Path) -> Path:
     completed = subprocess.run(
@@ -158,4 +174,34 @@ try:
     print(graph.store.meta()["kg_snapshot_id"])
 finally:
     graph.close()
+"""
+
+
+_BUNDLED_SMOKE_SCRIPT = r"""
+from pathlib import Path
+import sys
+
+import seektalent_keyword_graph
+from seektalent_keyword_graph.engine import KeywordGraph
+
+package_path = Path(seektalent_keyword_graph.__file__).resolve()
+repo_root = Path(sys.argv[1]).resolve()
+try:
+    package_path.relative_to(repo_root)
+except ValueError:
+    pass
+else:
+    message = f"imported seektalent_keyword_graph from source tree: {package_path}"
+    raise AssertionError(message)
+
+graph = KeywordGraph.open_default({})
+try:
+    print(graph.store.meta()["kg_snapshot_id"])
+finally:
+    graph.close()
+
+guarded_graph = KeywordGraph.open_default(
+    {"SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_ID": "kg-eval-fixture"}
+)
+guarded_graph.close()
 """
