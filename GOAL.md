@@ -13,9 +13,9 @@
 
 长期目标不是做通用知识图谱，而是让同一份 JD 和同一组已生成检索词在不同时间、不同运行中都能稳定地产生可解释、不过宽、不漏召回的查询词组合，并在实际调用 CTS / 猎聘 / Boss 等 provider 前给出可复盘的保留、降权、替换、alias probe、precision companion、score-only 或 fallback 建议。
 
-## Next Goal: Local Snapshot Inspector UI
+## Previous Goal: Local Snapshot Inspector UI
 
-下一个目标是在当前包内增加一个本地只读的 snapshot inspector UI，用于人工查看和验证 runtime snapshot 中的关键词召回画像。
+最近一个目标是在当前包内增加一个本地只读的 snapshot inspector UI，用于人工查看和验证 runtime snapshot 中的关键词召回画像。
 
 这个目标不是新建 Superpowers spec/plan，也不是重做图谱构建流程。它应该作为 Codex goal 执行：Codex 在 goal 内自行决定是否使用工作流、如何拆分任务、如何测试和 review；仓库文档只提供清晰的交付目标、验收标准、边界和行为控制。
 
@@ -38,4 +38,41 @@ UI 的第一版范围很固定：
 - 本包仍不得 import SeekTalent。
 - 第一版不拆 shim/full 两个包；只要保持零重依赖和 lazy import，UI 可以随当前包一起发布。
 
-配套说明放在 `03-runtime-inspector-ui/`。该目录是下一次 Codex goal 的目标上下文，不是逐 slice 实施计划。
+配套说明放在 `03-runtime-inspector-ui/`。该目录是 Local Snapshot Inspector UI 的目标上下文，不是逐 slice 实施计划。
+
+## Next Goal: GBrain-Inspired Production Builder Overhaul
+
+下一个目标是基于 GBrain 调研结果，完整重构离线 keyword graph builder，使它能够从真实 JD corpus、历史 query evidence、审阅后的 taxonomy/provider evidence 中构建生产可用的 graph snapshot，而不是继续依赖少量手写技术词或 fixture 行为。
+
+这个目标必须采用 GBrain 的核心工程思想，但不能盲目复制 GBrain 代码：
+
+- thin harness：本项目 builder 的 CLI 和命令执行器只做确定性执行、持久化、校验、导出；
+- rich skills/schema/configs：本项目 builder 运行时使用的实体类型、关系规则、LLM 辅助流程、review 质量标准和 release gate 由版本化文档、schema、规则配置和 eval fixtures 承载；它们不是 Codex 开发技能；
+- gazetteer/by-mention：从真实 surface inventory 和 corpus evidence 中做 longest-match mention extraction；
+- sliding/context window：每个 alias、abbreviation、equivalent、co-occurrence、precision companion 等关系都必须有局部窗口证据；
+- LLM 只作为本项目 offline builder 的候选生成和确认辅助，通过 builder-only OpenAI-compatible provider 配置调用；第一目标 provider 是阿里云百炼，必须有 dry-run、预算、eval、review gate；
+- runtime 继续只读本地 bundled snapshot，不联网、不调 CTS、不调 LLM、不 import builder/cts、不 import SeekTalent。
+
+这是完整产品目标，不是 MVP、demo、占位实现或只补文档。后续 goal 必须明确禁止以下偷懒行为：
+
+- 用 fixture-specific branch 伪装生产行为；
+- 用固定常量输出满足 contract；
+- 用硬编码示例词表冒充真实抽取；
+- 写 placeholder API 或空成功响应；
+- 生成没有 evidence/provenance 的 graph edge；
+- 生成没有真实来源标识的 provider observation；
+- broad `except` 吞掉构建失败；
+- 跳过 wheel/install 后 bundled snapshot smoke test；
+- 只更新 README/readiness 就声称完成。
+
+配套说明放在 `04-gbrain-inspired-builder/`。该目录是后续 Codex goal 的目标上下文，明确记录 GBrain 参考文件、产品范围、硬边界、禁止事项和可直接使用的 goal prompt。
+
+该目标的完成标准必须使用 `04-gbrain-inspired-builder/06-completion-criteria.md`、`04-gbrain-inspired-builder/07-quality-gate-schema.md` 和 `04-gbrain-inspired-builder/08-execution-contract.md`：
+
+- 必须从本机已经存在的 9000+ JD corpus 通过 production corpus manifest 导入；
+- 已确认的本机 bootstrap corpus 是 `/Users/frankqdwang/MLE/jd-graph/data/derived/company=bytedance/source=jobs_bytedance/factual_jobs_mainland.jsonl`，9530 行；源配置是 `/Users/frankqdwang/MLE/jd-graph/config/sources/bytedance_jobs_2026_05_12.json`；
+- 每次新的生产构建、评估或回归验证都必须从 clean build DB 重新导入，不能复用脏数据库；
+- 图谱构建完成后必须使用空上下文 subagent-driven review 审查关键词是否适合作为简历搜索词、是否避免 hack/fixture shortcut、手写规则是否足够泛化；
+- 如果图谱被确认可用，最终完成还必须在显式人工 gate 后使用真实 CTS 对 release-candidate keyword surfaces 做逐词检索并写入召回数量、状态、bucket、时间和 provenance；
+- mock、fake、dry-run、fixture CTS observation 不能作为最终完成证据。
+- `docs/superpowers/` 已删除且不得恢复；旧上下文承接关系以 `04-gbrain-inspired-builder/09-supersession-map.md` 为准。
