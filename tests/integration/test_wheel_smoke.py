@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import subprocess
 import sys
+import time
+import urllib.request
 from importlib import metadata
 from pathlib import Path
 
@@ -105,6 +108,54 @@ def test_built_wheel_installs_and_opens_fixture_snapshot(tmp_path: Path) -> None
 
     assert bundled_completed.stdout.strip() == "kg-eval-fixture"
 
+    keyword_graph = venv_dir / "bin" / "keyword-graph"
+    process = subprocess.Popen(
+        [
+            str(keyword_graph),
+            "inspect-ui",
+            "--port",
+            "0",
+            "--snapshot",
+            str(fixture.snapshot_path),
+            "--manifest",
+            str(fixture.manifest_path),
+        ],
+        cwd=tmp_path,
+        env=smoke_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        startup = _read_startup_payload(process)
+        base_url = startup["url"]
+        with urllib.request.urlopen(f"{base_url}/", timeout=5) as response:
+            index_html = response.read().decode("utf-8")
+        request = urllib.request.Request(
+            f"{base_url}/api/query-recall",
+            data=(
+                b'{"provider":"cts","query_text":"React",'
+                b'"query_mode":"keyword","max_alternatives":10}'
+            ),
+            headers={"content-type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            api_payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+    assert '<main class="inspector-shell">' in index_html
+    assert api_payload["response"]["input_observations"][0]["query_text"] == "React"
+    assert api_payload["response"]["recommendations"][0]["action"] == (
+        "add_alias_probe"
+    )
+
 
 def _venv_site_packages(python: Path) -> Path:
     completed = subprocess.run(
@@ -150,6 +201,29 @@ def _copy_distribution_metadata(
         Path(distribution.locate_file(dist_info_dir)),
         target_site_packages / dist_info_dir,
     )
+
+
+def _read_startup_payload(process: subprocess.Popen[str]) -> dict[str, str]:
+    assert process.stdout is not None
+    assert process.stderr is not None
+    deadline = time.monotonic() + 10
+    line = ""
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            stderr = process.stderr.read()
+            raise AssertionError(
+                f"inspect-ui exited early with {process.returncode}: {stderr}"
+            )
+        line = process.stdout.readline()
+        if line:
+            break
+        time.sleep(0.05)
+    assert line, "inspect-ui did not print startup payload"
+    payload = json.loads(line)
+    assert payload["command"] == "inspect-ui"
+    assert payload["status"] == "listening"
+    assert payload["url"].startswith("http://127.0.0.1:")
+    return payload
 
 
 _SMOKE_SCRIPT = r"""

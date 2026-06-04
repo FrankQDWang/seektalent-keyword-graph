@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -477,25 +476,3 @@ def _request_id(provider: str, query_mode: object, query_text: str) -> str:
 def _path_detail(path: Path | None) -> str | None:
     return None if path is None else str(path)
 
-
-def error_payload(
-    code: str, message: str, details: dict[str, object] | None = None
-) -> dict[str, object]:
-    return {
-        "error": {
-            "code": code,
-            "message": message,
-            "details": {} if details is None else details,
-        }
-    }
-
-
-def main(argv: list[str] | None = None) -> int:
-    from seektalent_keyword_graph.cli import main as cli_main
-
-    return cli_main(argv)
-
-
-def handle_startup_error(exc: InspectorStartupError) -> int:
-    print(json.dumps(error_payload(exc.code, str(exc), exc.details)), file=sys.stderr)
-    return 1
