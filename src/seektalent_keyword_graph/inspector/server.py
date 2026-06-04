@@ -283,9 +283,11 @@ class InspectorRequestHandler(BaseHTTPRequestHandler):
         try:
             content_length = int(raw_length)
         except ValueError as exc:
-            raise ValueError("content-length must be an integer") from exc
-        if content_length > 65_536:
-            raise ValueError("request body must be 65536 bytes or smaller")
+            raise ValueError(
+                "content-length must be between 1 and 65536 bytes"
+            ) from exc
+        if not 1 <= content_length <= 65_536:
+            raise ValueError("content-length must be between 1 and 65536 bytes")
         body = self.rfile.read(content_length)
         if not body:
             raise ValueError("request body is required")

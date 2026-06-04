@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import socket
 import sys
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -61,6 +63,39 @@ def post_json(url: str, payload: dict[str, object] | str) -> tuple[int, dict[str
             return response.status, json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         return exc.code, json.loads(exc.read().decode("utf-8"))
+
+
+def raw_post(
+    host: str,
+    port: int,
+    *,
+    content_length: str,
+    body: bytes,
+) -> tuple[int, dict[str, Any]]:
+    request = (
+        b"POST /api/query-recall HTTP/1.1\r\n"
+        + f"Host: {host}:{port}\r\n".encode("ascii")
+        + b"Content-Type: application/json\r\n"
+        + f"Content-Length: {content_length}\r\n".encode("ascii")
+        + b"Connection: close\r\n"
+        + b"\r\n"
+        + body
+    )
+    with socket.create_connection((host, port), timeout=5) as client:
+        client.settimeout(5)
+        client.sendall(request)
+        client.shutdown(socket.SHUT_WR)
+        response = b""
+        while True:
+            chunk = client.recv(65536)
+            if not chunk:
+                break
+            response += chunk
+
+    header, raw_body = response.split(b"\r\n\r\n", maxsplit=1)
+    status_line = header.splitlines()[0].decode("ascii")
+    status = int(status_line.split()[1])
+    return status, json.loads(raw_body.decode("utf-8"))
 
 
 @pytest.fixture(scope="module")
@@ -218,6 +253,48 @@ def test_invalid_json_request_uses_invalid_request_error(
             "details": {},
         }
     }
+
+
+@pytest.mark.parametrize(
+    ("content_length", "body"),
+    [
+        (
+            "-1",
+            b'{"provider":"cts","query_text":"'
+            + (b"GhostLang" * 9000)
+            + b'"}',
+        ),
+        ("65537", b"{}"),
+        ("not-an-int", b"{}"),
+    ],
+    ids=("negative", "oversized", "malformed"),
+)
+def test_invalid_content_length_uses_invalid_request_error(
+    fixture_flow_result: Any,
+    content_length: str,
+    body: bytes,
+) -> None:
+    config = InspectorServerConfig(
+        port=0,
+        snapshot_path=fixture_flow_result.snapshot_path,
+        manifest_path=fixture_flow_result.manifest_path,
+    )
+    with running_server(config) as base_url:
+        parsed = urllib.parse.urlparse(base_url)
+        assert parsed.hostname is not None
+        assert parsed.port is not None
+        status, payload = raw_post(
+            parsed.hostname,
+            parsed.port,
+            content_length=content_length,
+            body=body,
+        )
+
+    assert status == 400
+    assert payload["error"]["code"] == "invalid_request"
+    assert payload["error"]["message"] == (
+        "content-length must be between 1 and 65536 bytes"
+    )
 
 
 def test_invalid_snapshot_startup_uses_invalid_snapshot_code(tmp_path: Path) -> None:

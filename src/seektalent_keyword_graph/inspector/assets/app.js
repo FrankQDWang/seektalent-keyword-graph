@@ -21,6 +21,14 @@ function setState(message, tone = "info") {
   stateEl.textContent = message || "";
 }
 
+function clearResults() {
+  observationEl.replaceChildren();
+  recommendationsEl.replaceChildren();
+  alternativesEl.replaceChildren();
+  warningsEl.replaceChildren();
+  provenanceEl.textContent = "";
+}
+
 async function loadMeta() {
   const [providersResponse, metaResponse] = await Promise.all([
     fetch("/api/providers"),
@@ -39,11 +47,15 @@ async function loadMeta() {
     }),
   );
 
-  snapshotSummary.textContent = [
-    `snapshot ${metaPayload.meta.kg_snapshot_id}`,
-    metaPayload.snapshot.source,
-    metaPayload.snapshot.path,
-  ].join(" · ");
+  snapshotSummary.replaceChildren();
+  renderKeyValues(snapshotSummary, [
+    ["snapshot_id", metaPayload.meta.kg_snapshot_id],
+    ["source", metaPayload.snapshot.source],
+    ["snapshot_path", metaPayload.snapshot.path],
+    ["manifest_path", metaPayload.snapshot.manifest_path],
+    ["built_at", metaPayload.meta.built_at],
+    ["providers", metaPayload.providers.join(", ")],
+  ]);
 }
 
 function renderKeyValues(target, rows) {
@@ -76,7 +88,15 @@ function renderResponse(payload) {
   recommendationsEl.replaceChildren(
     ...response.recommendations.map((recommendation) => {
       const row = document.createElement("p");
-      row.innerHTML = `<span class="pill">${recommendation.action}</span> ${text(recommendation.query_text)} → ${text(recommendation.recommended_query_text)} · ${text(recommendation.reason_code)} · ${text(recommendation.reason)}`;
+      const action = document.createElement("span");
+      action.className = "pill";
+      action.textContent = recommendation.action;
+      row.append(
+        action,
+        document.createTextNode(
+          ` ${text(recommendation.query_text)} → ${text(recommendation.recommended_query_text)} · ${text(recommendation.reason_code)} · ${text(recommendation.reason)} · evidence ${text(recommendation.evidence_observation_ids?.join(", "))}`,
+        ),
+      );
       return row;
     }),
   );
@@ -92,11 +112,13 @@ function renderResponse(payload) {
         alternative.source_concept_id,
         alternative.source_surface_id,
         alternative.target_surface_id,
+        observationRow.provider,
         observationRow.total,
         observationRow.status,
         observationRow.recall_bucket,
         observationRow.observed_at,
-        alternative.evidence_ref || alternative.evidence_type,
+        alternative.evidence_type,
+        alternative.evidence_ref,
       ]) {
         const td = document.createElement("td");
         td.textContent = text(value);
@@ -140,6 +162,8 @@ async function submitQueryRecall(event) {
         request: payload,
         response: body.error.details.response,
       });
+    } else {
+      clearResults();
     }
     return;
   }

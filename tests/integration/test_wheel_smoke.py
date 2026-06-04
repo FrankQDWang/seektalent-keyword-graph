@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from importlib import metadata
 from pathlib import Path
 
+import pytest
 from _fixture_flow_loader import load_run_fixture_flow
 
 run_fixture_flow = load_run_fixture_flow()
@@ -157,6 +160,25 @@ def test_built_wheel_installs_and_opens_fixture_snapshot(tmp_path: Path) -> None
     )
 
 
+def test_inspect_ui_startup_reader_times_out_for_silent_process() -> None:
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(10)"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        with pytest.raises(AssertionError, match="did not print startup payload"):
+            _read_startup_payload(process, timeout_seconds=0.2)
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
 def _venv_site_packages(python: Path) -> Path:
     completed = subprocess.run(
         [
@@ -203,21 +225,35 @@ def _copy_distribution_metadata(
     )
 
 
-def _read_startup_payload(process: subprocess.Popen[str]) -> dict[str, str]:
+def _read_startup_payload(
+    process: subprocess.Popen[str], *, timeout_seconds: float = 10.0
+) -> dict[str, str]:
     assert process.stdout is not None
     assert process.stderr is not None
-    deadline = time.monotonic() + 10
-    line = ""
+    lines: queue.Queue[str] = queue.Queue(maxsize=1)
+
+    def read_stdout_line() -> None:
+        line = process.stdout.readline()
+        if line:
+            lines.put(line)
+
+    reader = threading.Thread(target=read_stdout_line, daemon=True)
+    reader.start()
+    deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         if process.poll() is not None:
             stderr = process.stderr.read()
             raise AssertionError(
                 f"inspect-ui exited early with {process.returncode}: {stderr}"
             )
-        line = process.stdout.readline()
-        if line:
+        remaining = max(0.0, deadline - time.monotonic())
+        try:
+            line = lines.get(timeout=min(0.05, remaining))
             break
-        time.sleep(0.05)
+        except queue.Empty:
+            continue
+    else:
+        line = ""
     assert line, "inspect-ui did not print startup payload"
     payload = json.loads(line)
     assert payload["command"] == "inspect-ui"
