@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -29,8 +30,12 @@ def test_runtime_settings_load_only_seektalent_keyword_graph_env() -> None:
 
     env = _GuardedEnv(
         {
+            "SEEKTALENT_KEYWORD_GRAPH_MODE": "dev",
             "SEEKTALENT_KEYWORD_GRAPH_ENABLED": "false",
             "SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_PATH": "/srv/kg/snapshot.sqlite3",
+            "SEEKTALENT_KEYWORD_GRAPH_MANIFEST_PATH": (
+                "/srv/kg/snapshot-manifest.json"
+            ),
             "SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_ID": "kg-eval-fixture",
             "SEEKTALENT_KEYWORD_GRAPH_FAIL_OPEN": "true",
             "SEEKTALENT_KEYWORD_GRAPH_MAX_BUNDLES": "7",
@@ -43,16 +48,20 @@ def test_runtime_settings_load_only_seektalent_keyword_graph_env() -> None:
 
     settings = KeywordGraphRuntimeSettings.from_env(env)
 
+    assert settings.mode == "dev"
     assert settings.enabled is False
     assert settings.snapshot_path == Path("/srv/kg/snapshot.sqlite3")
+    assert settings.manifest_path == Path("/srv/kg/snapshot-manifest.json")
     assert settings.snapshot_id == "kg-eval-fixture"
     assert settings.fail_open is True
     assert settings.max_bundles == 7
     assert settings.default_provider == "liepin"
     assert settings.max_alternatives == 11
     assert env.keys_read == {
+        "SEEKTALENT_KEYWORD_GRAPH_MODE",
         "SEEKTALENT_KEYWORD_GRAPH_ENABLED",
         "SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_PATH",
+        "SEEKTALENT_KEYWORD_GRAPH_MANIFEST_PATH",
         "SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_ID",
         "SEEKTALENT_KEYWORD_GRAPH_FAIL_OPEN",
         "SEEKTALENT_KEYWORD_GRAPH_MAX_BUNDLES",
@@ -61,9 +70,20 @@ def test_runtime_settings_load_only_seektalent_keyword_graph_env() -> None:
     }
 
 
+def test_runtime_settings_default_to_prod_bundled_snapshot() -> None:
+    from seektalent_keyword_graph.config import KeywordGraphRuntimeSettings
+
+    settings = KeywordGraphRuntimeSettings.from_env(_GuardedEnv({}))
+
+    assert settings.mode == "prod"
+    assert settings.snapshot_path is None
+    assert settings.manifest_path is None
+
+
 @pytest.mark.parametrize(
     ("env_name", "env_value"),
     [
+        ("SEEKTALENT_KEYWORD_GRAPH_MODE", "staging"),
         ("SEEKTALENT_KEYWORD_GRAPH_ENABLED", "maybe"),
         ("SEEKTALENT_KEYWORD_GRAPH_MAX_BUNDLES", "many"),
     ],
@@ -83,6 +103,82 @@ def test_runtime_settings_parse_errors_name_env_var(
 
     with pytest.raises(ValueError, match=env_name):
         KeywordGraphRuntimeSettings.from_env(env)
+
+
+def test_open_default_uses_dev_snapshot_override(
+    fixture_flow_result: Any,
+) -> None:
+    graph = KeywordGraph.open_default(
+        {
+            "SEEKTALENT_KEYWORD_GRAPH_MODE": "dev",
+            "SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_PATH": str(
+                fixture_flow_result.snapshot_path
+            ),
+            "SEEKTALENT_KEYWORD_GRAPH_MANIFEST_PATH": str(
+                fixture_flow_result.manifest_path
+            ),
+        }
+    )
+    try:
+        assert graph.store.meta()["kg_snapshot_id"] == "kg-eval-fixture"
+    finally:
+        graph.close()
+
+
+def test_open_default_uses_bundled_snapshot(
+    fixture_flow_result: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundled_package = tmp_path / "test_bundled_snapshot"
+    bundled_package.mkdir()
+    (bundled_package / "__init__.py").write_text("", encoding="utf-8")
+    shutil.copy2(
+        fixture_flow_result.snapshot_path,
+        bundled_package / "keyword-graph.sqlite3",
+    )
+    shutil.copy2(
+        fixture_flow_result.manifest_path,
+        bundled_package / "snapshot-manifest.json",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    from seektalent_keyword_graph.runtime import bundled_snapshot
+
+    monkeypatch.setattr(
+        bundled_snapshot,
+        "BUNDLED_SNAPSHOT_PACKAGE",
+        "test_bundled_snapshot",
+    )
+
+    graph = KeywordGraph.open_default({})
+    try:
+        assert graph.store.meta()["kg_snapshot_id"] == "kg-eval-fixture"
+    finally:
+        graph.close()
+
+
+def test_open_default_fails_clearly_when_dev_snapshot_override_is_missing() -> None:
+    with pytest.raises(
+        SnapshotError,
+        match="dev mode requires SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_PATH",
+    ):
+        KeywordGraph.open_default({"SEEKTALENT_KEYWORD_GRAPH_MODE": "dev"})
+
+
+def test_open_default_fails_clearly_when_bundled_snapshot_is_not_packaged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from seektalent_keyword_graph.runtime import bundled_snapshot
+
+    monkeypatch.setattr(
+        bundled_snapshot,
+        "BUNDLED_SNAPSHOT_PACKAGE",
+        "missing_bundled_snapshot_package",
+    )
+
+    with pytest.raises(SnapshotError, match="bundled runtime snapshot"):
+        KeywordGraph.open_default({})
 
 
 def test_sample_consumer_uses_public_runtime_facade_only(
@@ -224,10 +320,14 @@ def test_docs_define_consumer_env_and_query_recall_position() -> None:
     recall_doc = (DOCS_DIR / "query-recall-optimization.md").read_text(encoding="utf-8")
     query_plan_doc = (DOCS_DIR / "query-plan-contract.md").read_text(encoding="utf-8")
 
+    assert "SEEKTALENT_KEYWORD_GRAPH_MODE" in integration
     assert "SEEKTALENT_KEYWORD_GRAPH_DEFAULT_PROVIDER" in integration
     assert "SEEKTALENT_KEYWORD_GRAPH_MAX_ALTERNATIVES" in integration
+    assert "opens the snapshot packaged under" in integration
+    assert "KeywordGraph.open_default()" in integration
     assert "SEEKTALENT_KEYWORD_GRAPH_DEFAULT_PROVIDER" in recall_doc
     assert "SEEKTALENT_KEYWORD_GRAPH_MAX_ALTERNATIVES" in recall_doc
+    assert "embedded snapshot" in recall_doc
     assert "no runtime network I/O" in integration
     assert "no CTS" in integration
     assert "compatibility rules" in query_plan_doc

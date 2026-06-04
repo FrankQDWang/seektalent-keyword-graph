@@ -91,6 +91,9 @@ FINAL_VERIFICATION_COMMANDS = [
         "tests/integration/test_query_recall_optimization.py",
         "-q",
     ),
+    command_spec(
+        "uv", "run", "pytest", "tests/contract/test_consumer_contract.py", "-q"
+    ),
 ]
 
 
@@ -349,7 +352,12 @@ ACCEPTANCE_EVIDENCE: dict[str, list[AcceptanceItem]] = {
         AcceptanceItem(
             "Consumer tests demonstrate how SeekTalent would load config, call "
             "the package, and fail open with `keyword_graph_unavailable`.",
-            "`uv run pytest`",
+            "`uv run pytest tests/contract/test_consumer_contract.py -q`",
+        ),
+        AcceptanceItem(
+            "Prod runtime defaults to the bundled package snapshot while dev "
+            "mode requires an explicit snapshot override.",
+            "`uv run pytest tests/contract/test_consumer_contract.py -q`",
         ),
         AcceptanceItem(
             "Docs define `SEEKTALENT_KEYWORD_GRAPH_*` env vars and no-CTS-user "
@@ -371,6 +379,11 @@ ACCEPTANCE_EVIDENCE: dict[str, list[AcceptanceItem]] = {
         AcceptanceItem(
             "Wheel builds and wheel install smoke passes.",
             "`uv run python -m build --wheel` and `uv run pytest`",
+        ),
+        AcceptanceItem(
+            "Wheel configuration reserves package data slots for the bundled "
+            "runtime snapshot and manifest.",
+            "`uv run python -m build --wheel`",
         ),
         AcceptanceItem(
             "Artifact validation checks compressed size, manifest, checksum, "
@@ -581,6 +594,14 @@ def render_report(
             "Completion status: complete",
             "Evidence: fixture snapshot build, manifest, checksum, gzip artifact, "
             "`provider_recall_observations`, and `keyword-graph validate-snapshot`.",
+            "",
+            "## Bundled Snapshot Distribution Status",
+            "",
+            "Completion status: complete",
+            "Evidence: `uv run pytest tests/contract/test_consumer_contract.py -q`; "
+            "`uv run python -m build --wheel`; runtime opens package data by "
+            "default in prod and external snapshot paths only in dev/operator "
+            "mode.",
             "",
             "## Acceptance Evidence Matrix",
             "",

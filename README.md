@@ -17,8 +17,8 @@ seektalent-keyword-graph
 第一阶段做一个可安装的小包：
 
 - 离线构建：我们使用内部 CTS key 对词面做低速、受控、count-only 探测，生成 SQLite snapshot。
-- 本地运行：用户安装 package 和 snapshot 后，SeekTalent 调用本地函数，输入 JD / RequirementSheet / notes 输出 query bundles，或输入已生成的 query term pool 输出 provider-aware Query Recall Optimization 建议。
-- 数据分发：同一个独立 repo 发布 Python package、压缩后的关键词图谱 snapshot、manifest 和 checksum。snapshot 不包含 CTS key，不包含原始简历正文，不要求用户实时访问 CTS。
+- 本地运行：用户安装一个完整 Python package 后，SeekTalent 调用本地函数，输入 JD / RequirementSheet / notes 输出 query bundles，或输入已生成的 query term pool 输出 provider-aware Query Recall Optimization 建议。
+- 数据分发：同一个独立 repo 发布一个包含 runtime 代码、关键词图谱 SQLite snapshot、manifest 和 checksum 元信息的 Python package。snapshot 不包含 CTS key，不包含原始简历正文，不要求用户实时访问 CTS。
 - Snapshot 节奏：手动发布 candidate snapshot，稳定后目标两周一次；压缩后软目标 `<50MB`，硬上限 `<100MB`。
 - CTS 节奏：真实 CTS count probe 第一版按 `1 RPS / 并发 1` 起步，只在 09:00-21:00 运行，夜间暂停；不设固定 daily cap。
 - 人工参与：不设计大规模人工复核。第一版以自动规则、回放评估和极少量抽样检查为主，人工时间预算按每天最多 10 分钟设计。

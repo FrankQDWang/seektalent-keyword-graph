@@ -1,6 +1,6 @@
 # Readiness Report
 
-Verified implementation HEAD: `fcf1ed4fa215a0ec8d4e3a18bc849bff95b6e47e`
+Verified implementation HEAD: `c69840ee538e63b795bbfc3444612190e079b9d5`
 Note: A later report-refresh commit may store this generated report; the verified implementation HEAD above is the code revision checked.
 Overall status: complete
 
@@ -15,8 +15,9 @@ Overall status: complete
 - `uv run pytest tests/integration/test_cli_end_to_end.py -q`
 - `uv run pytest tests/integration/test_jd_to_query_plan.py -q`
 - `uv run pytest tests/integration/test_query_recall_optimization.py -q`
-- `uv run python scripts/run_fixture_flow.py --work-dir '/private/tmp/readiness fixture ; safe'`
-- `uv run keyword-graph validate-snapshot --snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3' --manifest '/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json' --compressed-snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz'`
+- `uv run pytest tests/contract/test_consumer_contract.py -q`
+- `uv run python scripts/run_fixture_flow.py --work-dir /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow`
+- `uv run keyword-graph validate-snapshot --snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3 --manifest /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json --compressed-snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz`
 
 ## Final Verification Evidence
 
@@ -56,14 +57,18 @@ Overall status: complete
   Exit code: 0
   Status: success
   First meaningful output line: ..                                                                       [100%]
-- Command: `uv run python scripts/run_fixture_flow.py --work-dir '/private/tmp/readiness fixture ; safe'`
+- Command: `uv run pytest tests/contract/test_consumer_contract.py -q`
   Exit code: 0
   Status: success
-  First meaningful output line: "build_db_path": "/private/tmp/readiness fixture ; safe/build.sqlite3",
-- Command: `uv run keyword-graph validate-snapshot --snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3' --manifest '/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json' --compressed-snapshot '/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz'`
+  First meaningful output line: ..............                                                           [100%]
+- Command: `uv run python scripts/run_fixture_flow.py --work-dir /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow`
   Exit code: 0
   Status: success
-  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "dcddc9f4598281c2bd6de5eabe50427799b902c147edd43b22e006163ed58a6c", "manifest": "/private/tmp/readiness fixture ; safe/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/private/tmp/readiness fixture ; safe/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "a948b3af812fad7fcca53a0ed9bd15a8227ee105ac638d5622407cb1dfb49918", "status": "ok"}
+  First meaningful output line: "build_db_path": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/build.sqlite3",
+- Command: `uv run keyword-graph validate-snapshot --snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3 --manifest /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json --compressed-snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz`
+  Exit code: 0
+  Status: success
+  First meaningful output line: {"command": "validate-snapshot", "compressed_snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz", "errors": [], "gzip_sha256": "318215e3a56acb03ba5a5e42a09643164198e8584920655f72878c8013952ac6", "manifest": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json", "ok": true, "snapshot": "/var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3", "snapshot_sha256": "fbb5cab201ef665134e79cd9b1fd002c89b36ce0a3d15cebd4aef2903ab1520f", "status": "ok"}
 
 ## Query Recall Optimization Status
 
@@ -74,6 +79,11 @@ Evidence: `uv run pytest tests/integration/test_query_recall_optimization.py -q`
 
 Completion status: complete
 Evidence: fixture snapshot build, manifest, checksum, gzip artifact, `provider_recall_observations`, and `keyword-graph validate-snapshot`.
+
+## Bundled Snapshot Distribution Status
+
+Completion status: complete
+Evidence: `uv run pytest tests/contract/test_consumer_contract.py -q`; `uv run python -m build --wheel`; runtime opens package data by default in prod and external snapshot paths only in dev/operator mode.
 
 ## Acceptance Evidence Matrix
 
@@ -155,7 +165,8 @@ Evidence: fixture snapshot build, manifest, checksum, gzip artifact, `provider_r
 | Acceptance item | Evidence | Status |
 | --- | --- | --- |
 | Contract examples and JSON schemas are stable and validated. | `uv run pytest` | complete |
-| Consumer tests demonstrate how SeekTalent would load config, call the package, and fail open with `keyword_graph_unavailable`. | `uv run pytest` | complete |
+| Consumer tests demonstrate how SeekTalent would load config, call the package, and fail open with `keyword_graph_unavailable`. | `uv run pytest tests/contract/test_consumer_contract.py -q` | complete |
+| Prod runtime defaults to the bundled package snapshot while dev mode requires an explicit snapshot override. | `uv run pytest tests/contract/test_consumer_contract.py -q` | complete |
 | Docs define `SEEKTALENT_KEYWORD_GRAPH_*` env vars and no-CTS-user boundary. | `uv run pytest` | complete |
 | Docs show where Query Recall Optimization fits between SeekTalent query term pool generation and provider retrieval, with example request/response for `optimize_query_terms`. | `uv run pytest` | complete |
 | No SeekTalent main-project files are modified. | `git status --short` before commit and this scoped T16 commit | complete |
@@ -165,6 +176,7 @@ Evidence: fixture snapshot build, manifest, checksum, gzip artifact, `provider_r
 | Acceptance item | Evidence | Status |
 | --- | --- | --- |
 | Wheel builds and wheel install smoke passes. | `uv run python -m build --wheel` and `uv run pytest` | complete |
+| Wheel configuration reserves package data slots for the bundled runtime snapshot and manifest. | `uv run python -m build --wheel` | complete |
 | Artifact validation checks compressed size, manifest, checksum, secret markers, candidate markers, resume markers, and old names. | Validation command and old-name scan | complete |
 | CLI fixture flow runs end-to-end. | `uv run pytest tests/integration/test_cli_end_to_end.py -q` | complete |
 | Import-boundary tests cover runtime, domain, builder, CTS, and SeekTalent. | `uv run pytest tests/architecture/test_import_boundaries.py -q` | complete |

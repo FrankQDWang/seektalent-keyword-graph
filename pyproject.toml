@@ -28,6 +28,10 @@ keyword-graph = "seektalent_keyword_graph.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seektalent_keyword_graph"]
+artifacts = [
+    "src/seektalent_keyword_graph/data/keyword-graph.sqlite3",
+    "src/seektalent_keyword_graph/data/snapshot-manifest.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
