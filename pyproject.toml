@@ -31,6 +31,9 @@ packages = ["src/seektalent_keyword_graph"]
 artifacts = [
     "src/seektalent_keyword_graph/data/keyword-graph.sqlite3",
     "src/seektalent_keyword_graph/data/snapshot-manifest.json",
+    "src/seektalent_keyword_graph/inspector/assets/index.html",
+    "src/seektalent_keyword_graph/inspector/assets/app.css",
+    "src/seektalent_keyword_graph/inspector/assets/app.js",
 ]
 
 [tool.pytest.ini_options]
