@@ -104,6 +104,15 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--manifest", required=True)
     validate.add_argument("--compressed-snapshot")
     validate.set_defaults(handler=_handle_validate_snapshot)
+
+    inspect = subparsers.add_parser(
+        "inspect-ui",
+        help="Start the local read-only runtime snapshot inspector UI.",
+    )
+    inspect.add_argument("--snapshot")
+    inspect.add_argument("--manifest")
+    inspect.add_argument("--port", type=_port_arg, default=8765)
+    inspect.set_defaults(handler=_handle_inspect_ui)
     return parser
 
 
@@ -325,6 +334,17 @@ def _handle_validate_snapshot(args: argparse.Namespace) -> int:
     }
     _print_json(payload)
     return 0 if result.ok else 1
+
+
+def _handle_inspect_ui(args: argparse.Namespace) -> int:
+    run_server = _load_attr(
+        "seektalent_keyword_graph.inspector.server", "run_server"
+    )
+    return run_server(
+        port=args.port,
+        snapshot_path=args.snapshot,
+        manifest_path=args.manifest,
+    )
 
 
 def _fake_cts_client(fake_response_path: str, store: Any) -> Any:
@@ -625,6 +645,18 @@ def _print_json(payload: dict[str, Any]) -> None:
 
 def _load_attr(module_name: str, attr_name: str) -> Any:
     return getattr(importlib.import_module(module_name), attr_name)
+
+
+def _port_arg(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "port must be between 0 and 65535"
+        ) from exc
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 0 and 65535")
+    return port
 
 
 def _utc_now() -> str:

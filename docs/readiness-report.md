@@ -1,6 +1,6 @@
 # Readiness Report
 
-Verified implementation HEAD: `bdceebae20ff10d7fab9b015433dd2672561ede6`
+Verified implementation HEAD: `de73c646a16b85a4680537bbcfb579dd29882b56`
 Note: A later report-refresh commit may store this generated report; the verified implementation HEAD above is the code revision checked.
 Overall status: complete
 
@@ -16,6 +16,9 @@ Overall status: complete
 - `uv run pytest tests/integration/test_jd_to_query_plan.py -q`
 - `uv run pytest tests/integration/test_query_recall_optimization.py -q`
 - `uv run pytest tests/contract/test_consumer_contract.py -q`
+- `uv run pytest tests/inspector tests/architecture/test_inspector_boundaries.py tests/integration/test_wheel_smoke.py -q`
+- `uv run pytest tests/inspector/test_query_recall_api.py -q`
+- `uv run pytest tests/integration/test_wheel_smoke.py -q`
 - `uv run python scripts/run_fixture_flow.py --work-dir /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow`
 - `uv run keyword-graph validate-snapshot --snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3 --manifest /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/snapshot-manifest.json --compressed-snapshot /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow/snapshot/keyword-graph.sqlite3.gz`
 
@@ -61,6 +64,18 @@ Overall status: complete
   Exit code: 0
   Status: success
   First meaningful output line: ...............                                                          [100%]
+- Command: `uv run pytest tests/inspector tests/architecture/test_inspector_boundaries.py tests/integration/test_wheel_smoke.py -q`
+  Exit code: 0
+  Status: success
+  First meaningful output line: .........................                                                [100%]
+- Command: `uv run pytest tests/inspector/test_query_recall_api.py -q`
+  Exit code: 0
+  Status: success
+  First meaningful output line: ............                                                             [100%]
+- Command: `uv run pytest tests/integration/test_wheel_smoke.py -q`
+  Exit code: 0
+  Status: success
+  First meaningful output line: ..                                                                       [100%]
 - Command: `uv run python scripts/run_fixture_flow.py --work-dir /var/folders/ns/k10qv8w14s3c6kfkgp_xk3z00000gn/T/readiness-fixture-flow`
   Exit code: 0
   Status: success
@@ -74,6 +89,11 @@ Overall status: complete
 
 Completion status: complete
 Evidence: `uv run pytest tests/integration/test_query_recall_optimization.py -q`; fixture flow query recall responses; provider-aware snapshot validation.
+
+## Local Snapshot Inspector UI Status
+
+Completion status: complete
+Evidence: `uv run pytest tests/inspector tests/architecture/test_inspector_boundaries.py tests/integration/test_wheel_smoke.py -q`; `uv run pytest tests/inspector/test_query_recall_api.py -q`; `uv run pytest tests/integration/test_wheel_smoke.py -q`; headless Chrome screenshots `/private/tmp/kg-inspector-react.png` and `/private/tmp/kg-inspector-no-match.png` visually verified React recall and `no_match` empty/error state.
 
 ## Provider-Aware Snapshot Status
 

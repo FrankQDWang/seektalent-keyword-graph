@@ -145,6 +145,26 @@ def test_run_command_executes_argv_without_shell(monkeypatch: object) -> None:
     assert result.exit_code == 0
 
 
+def test_readiness_report_lists_inspector_ui_status_and_verification() -> None:
+    report = (PROJECT_ROOT / "docs" / "readiness-report.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "## Local Snapshot Inspector UI Status" in report
+    assert "Completion status: complete" in report
+    inspector_subset = (
+        "uv run pytest tests/inspector "
+        "tests/architecture/test_inspector_boundaries.py "
+        "tests/integration/test_wheel_smoke.py -q"
+    )
+    for command in (
+        inspector_subset,
+        "uv run pytest tests/inspector/test_query_recall_api.py -q",
+        "uv run pytest tests/integration/test_wheel_smoke.py -q",
+    ):
+        assert command in report
+
+
 def _load_writer() -> object:
     spec = importlib.util.spec_from_file_location("write_readiness_report", SCRIPT_PATH)
     if spec is None or spec.loader is None:
