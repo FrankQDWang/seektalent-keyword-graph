@@ -19,10 +19,13 @@ Translate this pattern into the keyword graph builder:
 
 - CLI commands should do deterministic execution only.
 - Domain decisions should live in versioned schema, rules, eval fixtures, and
-  rich skill docs.
-- Agent workflows should read the relevant skill before changing schema,
-  extraction, relation rules, LLM prompts, provider probing, or snapshot release
-  logic.
+  product-owned rich skill docs.
+- Rich skills are builder product artifacts for this repository's graph
+  construction system. They are not Codex development skills and are not a
+  substitute for tests, schemas, or release gates.
+- Codex may read these documents as requirements during implementation, but the
+  product value is that the keyword graph builder can run with thin
+  deterministic commands and rich, versioned domain process/configuration.
 
 ## Graph Extraction Lessons
 
@@ -81,6 +84,9 @@ Keyword graph translation:
 
 - LLM may propose candidate surfaces, entity types, aliases, abbreviations,
   equivalent terms, and evidence spans during offline builder runs.
+- LLM calls are performed by this project's builder through an explicitly
+  configured OpenAI-compatible provider endpoint. The first intended provider is
+  Alibaba Cloud Bailian, using builder-only credentials and provider config.
 - LLM output must be reviewed or validated before entering the release snapshot.
 - LLM calls must have explicit config, dry-run support, budgets, retry caps,
   eval fixtures, and readiness reporting.

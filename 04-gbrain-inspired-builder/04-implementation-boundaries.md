@@ -84,6 +84,11 @@ Runtime is user-side package behavior. It must:
 LLM assistance is allowed only in offline builder workflows. It must be
 explicitly configured and auditable.
 
+LLM assistance is a product-builder integration, not Codex assistance. The
+builder must support builder-only OpenAI-compatible provider configuration, with
+Alibaba Cloud Bailian as the first intended provider. Runtime, inspector UI, and
+SeekTalent integration paths must never read LLM credentials or call LLM APIs.
+
 LLM outputs must include:
 
 - input document/window ID;
@@ -128,6 +133,11 @@ fresh context. They must explicitly check keyword usefulness for resume search,
 anti-hack compliance, and whether handwritten rules are generalizable rather
 than tailored to specific domains or named test terms.
 
+Quality gate output must follow `07-quality-gate-schema.md`, and release
+candidate surfaces, CTS gate artifacts, subagent review artifacts, anti-hack
+first-slice guards, and GBrain adoption evidence must follow
+`08-execution-contract.md`.
+
 ## Definition of Done
 
 The future implementation is done only when the full path works end to end:
@@ -137,6 +147,8 @@ The future implementation is done only when the full path works end to end:
 - manifest-backed corpus validation;
 - extraction and relation inference with evidence;
 - graph quality report with sampling and replay evidence;
+- machine-readable quality gate artifact;
+- release-candidate surface artifact;
 - independent clean-context subagent review artifacts;
 - real gated CTS observation storage for release-candidate CTS keyword surfaces;
 - snapshot build and validation;

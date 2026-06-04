@@ -46,11 +46,11 @@ UI 的第一版范围很固定：
 
 这个目标必须采用 GBrain 的核心工程思想，但不能盲目复制 GBrain 代码：
 
-- thin harness：CLI 和核心代码只做确定性执行、持久化、校验、导出；
-- rich skills/schema：实体类型、关系规则、LLM 辅助流程、review 质量标准和 release gate 由文档、schema、规则配置和 eval fixtures 承载；
+- thin harness：本项目 builder 的 CLI 和命令执行器只做确定性执行、持久化、校验、导出；
+- rich skills/schema/configs：本项目 builder 运行时使用的实体类型、关系规则、LLM 辅助流程、review 质量标准和 release gate 由版本化文档、schema、规则配置和 eval fixtures 承载；它们不是 Codex 开发技能；
 - gazetteer/by-mention：从真实 surface inventory 和 corpus evidence 中做 longest-match mention extraction；
 - sliding/context window：每个 alias、abbreviation、equivalent、co-occurrence、precision companion 等关系都必须有局部窗口证据；
-- LLM 只作为 offline builder 的候选生成和确认辅助，必须有 dry-run、预算、eval、review gate；
+- LLM 只作为本项目 offline builder 的候选生成和确认辅助，通过 builder-only OpenAI-compatible provider 配置调用；第一目标 provider 是阿里云百炼，必须有 dry-run、预算、eval、review gate；
 - runtime 继续只读本地 bundled snapshot，不联网、不调 CTS、不调 LLM、不 import builder/cts、不 import SeekTalent。
 
 这是完整产品目标，不是 MVP、demo、占位实现或只补文档。后续 goal 必须明确禁止以下偷懒行为：
@@ -67,7 +67,7 @@ UI 的第一版范围很固定：
 
 配套说明放在 `04-gbrain-inspired-builder/`。该目录是后续 Codex goal 的目标上下文，明确记录 GBrain 参考文件、产品范围、硬边界、禁止事项和可直接使用的 goal prompt。
 
-该目标的完成标准必须使用 `04-gbrain-inspired-builder/06-completion-criteria.md`：
+该目标的完成标准必须使用 `04-gbrain-inspired-builder/06-completion-criteria.md`、`04-gbrain-inspired-builder/07-quality-gate-schema.md` 和 `04-gbrain-inspired-builder/08-execution-contract.md`：
 
 - 必须从本机已经存在的 9000+ JD corpus 通过 production corpus manifest 导入；
 - 已确认的本机 bootstrap corpus 是 `/Users/frankqdwang/MLE/jd-graph/data/derived/company=bytedance/source=jobs_bytedance/factual_jobs_mainland.jsonl`，9530 行；源配置是 `/Users/frankqdwang/MLE/jd-graph/config/sources/bytedance_jobs_2026_05_12.json`；
@@ -75,3 +75,4 @@ UI 的第一版范围很固定：
 - 图谱构建完成后必须使用空上下文 subagent-driven review 审查关键词是否适合作为简历搜索词、是否避免 hack/fixture shortcut、手写规则是否足够泛化；
 - 如果图谱被确认可用，最终完成还必须在显式人工 gate 后使用真实 CTS 对 release-candidate keyword surfaces 做逐词检索并写入召回数量、状态、bucket、时间和 provenance；
 - mock、fake、dry-run、fixture CTS observation 不能作为最终完成证据。
+- `docs/superpowers/` 已删除且不得恢复；旧上下文承接关系以 `04-gbrain-inspired-builder/09-supersession-map.md` 为准。

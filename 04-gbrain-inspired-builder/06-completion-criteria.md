@@ -39,6 +39,10 @@ Required evidence:
 - source corpus hash or per-file content hash policy;
 - privacy scan result.
 
+Before any production-candidate work, the preflight commands in
+`08-execution-contract.md` must pass and be recorded. If the primary mainland JD
+JSONL is missing or does not contain 9530 lines, the run is blocked.
+
 The production graph must be built from a clean database. Every new production
 build, evaluation run, and regression investigation must delete or recreate the
 previous build DB before import. Reusing a dirty DB, fixture DB, or previous
@@ -69,11 +73,18 @@ Each subagent must write a review artifact or summary that is linked from
 `docs/readiness-report.md`. If any reviewer reports a blocking issue, the goal
 is incomplete until the issue is fixed and the graph is rebuilt from a clean DB.
 
+Review artifacts must follow the path and field contract in
+`08-execution-contract.md`.
+
 ## Real CTS Completion Gate
 
 Final completion requires real CTS probing for every release-candidate keyword
 surface that will be included in the serving snapshot for CTS recall
 optimization.
+
+The release-candidate surface set must be materialized before CTS probing and
+must follow `08-execution-contract.md`. It must not be manually shrunk to make
+CTS coverage easier.
 
 For each probed surface, the snapshot must store:
 
@@ -96,6 +107,9 @@ Real CTS calls must still be explicitly gated by a human immediately before the
 probe run. If the gate is not granted, the correct final status is incomplete,
 not complete. No unattended real CTS calls are allowed.
 
+The human gate must be represented by the CTS gate artifact defined in
+`08-execution-contract.md`; a free-text readiness note is not enough.
+
 The real CTS probe flow must use rate limits, retry policy, resumable jobs,
 dedupe, and clear failure reporting. Partial CTS coverage cannot be hidden; it
 must be reported as incomplete unless explicitly accepted in the readiness
@@ -111,6 +125,8 @@ The goal is done only when all of these are true:
 - every build/evaluation cycle used a clean build DB;
 - graph extraction, relation inference, and snapshot build succeeded from the
   real corpus;
+- quality gate artifact followed `07-quality-gate-schema.md` and passed;
+- release-candidate surface artifact followed `08-execution-contract.md`;
 - independent clean-context subagent reviews found no blocking graph quality,
   anti-hack, or generalization issues;
 - real CTS observations were collected for every release-candidate CTS keyword

@@ -21,6 +21,9 @@ The full builder product must support the following end-to-end path:
 12. Prove runtime and inspector UI can query the bundled snapshot locally.
 13. Complete the hard acceptance criteria in `06-completion-criteria.md`,
     including clean-context subagent reviews and real CTS observations.
+14. Produce machine-readable quality gate, release-candidate, CTS gate, and
+    review artifacts defined in `07-quality-gate-schema.md` and
+    `08-execution-contract.md`.
 
 ## Required Corpus Manifest
 
@@ -170,10 +173,18 @@ must be recorded in the readiness report. Silent pass-through is not allowed.
 Mock, fake, fixture, and dry-run results may support lower-level engineering
 tests, but they are not acceptable completion evidence for the production graph.
 
+Quality reporting must follow `07-quality-gate-schema.md`; free-text reports
+alone are not acceptable production-readiness evidence.
+
 ## Required LLM Candidate Review Gate
 
 LLM assistance is allowed only as an offline candidate proposal path. LLM output
 must be stored separately from accepted graph facts until reviewed or validated.
+
+LLM assistance is performed by this project's offline builder through
+builder-only provider config. The first intended provider is Alibaba Cloud
+Bailian through an OpenAI-compatible endpoint. This does not mean using Codex as
+the LLM engine.
 
 Required candidate fields:
 

@@ -52,11 +52,16 @@ not delete it. Do not copy GBrain blindly. Translate its principles into this
 domain:
 
 - thin deterministic harness;
-- rich skills and schema-owned domain knowledge;
+- product-owned rich skills and schema-owned domain knowledge;
 - gazetteer/by-mention extraction;
 - context-window relation inference;
 - projection graph rebuild with provenance;
 - optional offline LLM assistance with budget and review gates.
+
+Rich skills and thin harness are product architecture for this builder. They are
+not Codex development skills. LLM assistance is performed by this project's
+offline builder through builder-only OpenAI-compatible provider configuration,
+with Alibaba Cloud Bailian as the first intended provider.
 
 ## Non-Negotiable Quality Bar
 
