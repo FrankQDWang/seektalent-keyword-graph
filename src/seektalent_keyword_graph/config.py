@@ -5,17 +5,22 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+RuntimeMode = Literal["prod", "dev"]
+
 
 class KeywordGraphRuntimeSettings(BaseModel):
-    """SeekTalent-side settings that never read builder or CTS configuration."""
+    """SeekTalent-side settings that never read builder configuration."""
 
     model_config = ConfigDict(extra="forbid")
 
+    mode: RuntimeMode = "prod"
     enabled: bool = True
     snapshot_path: Path | None = None
+    manifest_path: Path | None = None
     snapshot_id: str | None = None
     fail_open: bool = True
     max_bundles: int = Field(default=5, ge=1, le=20)
@@ -30,6 +35,7 @@ class KeywordGraphRuntimeSettings(BaseModel):
 
         env = os.environ if environ is None else environ
         return cls(
+            mode=_parse_mode(env.get("SEEKTALENT_KEYWORD_GRAPH_MODE")),
             enabled=_parse_bool(
                 env.get("SEEKTALENT_KEYWORD_GRAPH_ENABLED"),
                 default=True,
@@ -37,6 +43,9 @@ class KeywordGraphRuntimeSettings(BaseModel):
             ),
             snapshot_path=_optional_path(
                 env.get("SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_PATH")
+            ),
+            manifest_path=_optional_path(
+                env.get("SEEKTALENT_KEYWORD_GRAPH_MANIFEST_PATH")
             ),
             snapshot_id=_optional_str(env.get("SEEKTALENT_KEYWORD_GRAPH_SNAPSHOT_ID")),
             fail_open=_parse_bool(
@@ -75,6 +84,19 @@ def _optional_path(value: str | None) -> Path | None:
     if stripped is None:
         return None
     return Path(stripped)
+
+
+def _parse_mode(value: str | None) -> RuntimeMode:
+    stripped = _optional_str(value)
+    if stripped is None:
+        return "prod"
+    normalized = stripped.casefold()
+    if normalized in {"prod", "dev"}:
+        return cast(RuntimeMode, normalized)
+    raise ValueError(
+        "SEEKTALENT_KEYWORD_GRAPH_MODE must be 'prod' or 'dev', "
+        f"got {value!r}"
+    )
 
 
 def _parse_bool(value: str | None, *, default: bool, env_name: str) -> bool:

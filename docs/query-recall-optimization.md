@@ -9,7 +9,9 @@ contract is the package API and JSON schemas in `contracts/query-recall/`.
 
 ## Query Recall Optimization
 
-The consumer calls `KeywordGraph.open(...)` and then either
+The consumer opens the bundled package snapshot with `KeywordGraph.open_default()`
+in prod, or `KeywordGraph.open(...)` with explicit dev/operator snapshot paths,
+and then either
 `analyze_query_recall(QueryRecallRequest(...))` or
 `optimize_query_terms(QueryRecallRequest(...))`. Both methods read provider-aware
 observations from the local snapshot. They do not call live providers and do not
@@ -17,8 +19,13 @@ read CTS environment variables.
 
 Runtime defaults come from:
 
+- `SEEKTALENT_KEYWORD_GRAPH_MODE`
 - `SEEKTALENT_KEYWORD_GRAPH_DEFAULT_PROVIDER`
 - `SEEKTALENT_KEYWORD_GRAPH_MAX_ALTERNATIVES`
+
+The production default is one package with an embedded snapshot. External
+snapshot paths are for internal dev/operator use before a candidate snapshot is
+packaged.
 
 ## Request
 

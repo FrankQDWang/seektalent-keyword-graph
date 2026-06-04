@@ -22,4 +22,8 @@ data/
 *.sqlite3.gz
 
 !tests/fixtures/**/*.sqlite3
+!src/seektalent_keyword_graph/data/
+!src/seektalent_keyword_graph/data/__init__.py
+!src/seektalent_keyword_graph/data/keyword-graph.sqlite3
+!src/seektalent_keyword_graph/data/snapshot-manifest.json
 !data.example/**/*.jsonl
