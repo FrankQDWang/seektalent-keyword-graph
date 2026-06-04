@@ -37,6 +37,11 @@ Default server behavior:
 - keep the opened snapshot read-only;
 - shut down cleanly on interrupt.
 
+Command behavior:
+
+- implement the first version as `keyword-graph inspect-ui` on the existing console script;
+- do not add a second console script unless the implementation proves the existing CLI cannot support the command cleanly.
+
 ## API Boundary
 
 Minimal local API:
@@ -48,6 +53,20 @@ Minimal local API:
   - returns the public query recall response or a stable error object.
 - `GET /`
   - returns the static inspector page.
+
+Stable local API errors should use this shape:
+
+```json
+{
+  "error": {
+    "code": "unsupported_provider",
+    "message": "Provider is not available in this snapshot.",
+    "details": {}
+  }
+}
+```
+
+Initial error codes should cover `unsupported_provider`, `no_match`, `matched_without_observation`, `invalid_request`, `invalid_snapshot`, and `internal_error`.
 
 ## Security Boundary
 

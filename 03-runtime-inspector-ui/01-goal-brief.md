@@ -24,7 +24,7 @@ The goal prompt should give Codex the delivery objective, acceptance criteria, b
 
 First version should be a small local inspector bundled with the current package:
 
-- a local server command, such as `keyword-graph inspect-ui` or `keyword-graph-ui serve`;
+- a `keyword-graph inspect-ui` subcommand on the existing `keyword-graph` console script;
 - static HTML/CSS/JS served by that command;
 - JSON endpoints backed by the existing `KeywordGraph` runtime API;
 - no live provider calls;
@@ -39,4 +39,5 @@ First version should be a small local inspector bundled with the current package
 - Do not add snapshot mutation.
 - Do not call real CTS or other providers from the UI.
 - Do not replace the existing CLI build pipeline.
+- Do not add a second console script unless the implementation proves the existing CLI cannot support the UI command cleanly.
 - Do not split the package unless UI dependencies become materially heavy.

@@ -2,7 +2,7 @@
 
 把 SeekTalent 的“JD -> 检索词 -> 简历召回”从一次性 LLM 生成，升级为一个独立、轻量、可复盘、可评估、可持续演化的关键词图谱包。
 
-第一阶段只做关键词，并以独立 Python package 的形式交付给 SeekTalent 作为依赖，而不是做常驻服务、UI 或重型图数据库系统。
+第一阶段只做关键词，并以独立 Python package 的形式交付给 SeekTalent 作为依赖，而不是做常驻服务、面向最终用户的产品 UI 或重型图数据库系统。Local Snapshot Inspector UI 是本地只读的开发/验证工具，不改变包的轻量 runtime 形态。
 
 核心产物分两层：
 

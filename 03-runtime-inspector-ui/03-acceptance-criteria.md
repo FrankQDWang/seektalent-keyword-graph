@@ -2,7 +2,7 @@
 
 ## Local Server
 
-- A documented command starts the inspector UI from the installed package.
+- The documented `keyword-graph inspect-ui` command starts the inspector UI from the installed package.
 - The server binds to `127.0.0.1` by default.
 - The command accepts `--snapshot` and `--manifest`.
 - The command fails clearly when snapshot or manifest paths are missing, invalid, or fail validation.
@@ -19,6 +19,7 @@
   - no matching surface;
   - matched surface without observation;
   - corrupt or unavailable snapshot.
+- The page maps stable local API error objects into visible, non-overlapping UI states.
 
 ## Query Recall Result
 
@@ -63,11 +64,12 @@ The goal should include tests or checks that cover:
 - command help and startup validation;
 - static asset serving;
 - JSON API query against a fixture snapshot;
-- browser-level or HTTP-level request/response for a known fixture term such as `React`;
+- HTTP-level JSON API checks for success responses and stable error objects;
+- browser-level DOM or screenshot smoke check for a known fixture term such as `React` and at least one empty/error state;
 - no runtime builder/CTS import regression;
 - no CTS env read regression;
 - no provider network I/O regression;
-- package/wheel smoke if package data or console scripts change.
+- package/wheel smoke verifies the UI command starts from an installed wheel and includes static assets.
 
 Expected manual demo:
 
