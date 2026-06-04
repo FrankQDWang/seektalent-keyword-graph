@@ -152,8 +152,13 @@ def test_readiness_report_lists_inspector_ui_status_and_verification() -> None:
 
     assert "## Local Snapshot Inspector UI Status" in report
     assert "Completion status: complete" in report
+    inspector_subset = (
+        "uv run pytest tests/inspector "
+        "tests/architecture/test_inspector_boundaries.py "
+        "tests/integration/test_wheel_smoke.py -q"
+    )
     for command in (
-        "uv run pytest tests/inspector tests/architecture/test_inspector_boundaries.py tests/integration/test_wheel_smoke.py -q",
+        inspector_subset,
         "uv run pytest tests/inspector/test_query_recall_api.py -q",
         "uv run pytest tests/integration/test_wheel_smoke.py -q",
     ):

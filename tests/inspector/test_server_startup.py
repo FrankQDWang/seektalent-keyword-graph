@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import importlib.util
+import json
 import sys
 import threading
 import urllib.request
@@ -24,7 +24,9 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.fixture(scope="module")
 def fixture_flow_result(tmp_path_factory: pytest.TempPathFactory) -> Any:
     loader_path = ROOT / "tests" / "integration" / "_fixture_flow_loader.py"
-    spec = importlib.util.spec_from_file_location("inspector_fixture_loader", loader_path)
+    spec = importlib.util.spec_from_file_location(
+        "inspector_fixture_loader", loader_path
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)

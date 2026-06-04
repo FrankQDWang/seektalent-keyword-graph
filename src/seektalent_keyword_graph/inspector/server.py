@@ -8,7 +8,6 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from pathlib import Path
-from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from pydantic import ValidationError
@@ -475,4 +474,3 @@ def _request_id(provider: str, query_mode: object, query_text: str) -> str:
 
 def _path_detail(path: Path | None) -> str | None:
     return None if path is None else str(path)
-
